@@ -1,0 +1,61 @@
+<: #-*- perl -*- # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+my $ps = Helpers::PerlScript->new( name => 'refreshMas90Table.pl' , 
+                                   description => 'refreshes a mas90 table based on existing data',
+                                   include => [DB::DBHandleFactory,
+					       Mas90::Utils],
+                                   getopts => [{tag => 'tableName:s',
+						required => 't',
+						description => 'name of the mas90 table to refresh',},
+					       {tag => 'noRefresh',
+						description => 'don\'t attempt to update with new records ... bring all data across ',},
+					       ],
+                                   );
+print $ps->dump() . $ps->pod();
+:>
+
+my @tableName = split (/\s/,$tableName);
+
+my $tableArg;
+
+foreach my $table (@tableName) {
+
+    my $localTableName = Mas90::Utils::mas90tableName(data => $table);
+
+    my $dbhandle = DB::DBHandleFactory::newDBHandle();
+    unless ($noRefresh) {
+	my %results = %{$dbhandle->getData(sql => "
+select	*
+from	(
+		select 	datecreated, 
+			max(timecreated) timecreated 
+		from 	$localTableName 
+		where 	datecreated = (select max(DATECREATED) from $localTableName) 
+		group by datecreated
+	),
+	(
+		select 	dateupdated, 
+			max(timeupdated) timeupdated 
+		from 	$localTableName 
+		where 	dateupdated = (select max(DATEUPDATED) from $localTableName) 
+		group by dateupdated
+	)")};
+
+	for (my $ndx = 0; $ndx  < $results{rows}; $ndx++) {
+	    map {
+		eval '$main::' . $_ . ' = $results{' . $_ . '}[$ndx]';
+		debugPrint(1, '$results{' . $_ . "}[$ndx]" . " = " . $$_);
+	    } (keys (%results));
+	}
+
+	$tableArg .= ($tableArg ? " " : "") . "$table:$DATEUPDATED:$TIMEUPDATED:$DATECREATED:$TIMECREATED";
+    } else {
+	$tableArg .= ($tableArg ? " " : "") . $table;
+    }
+}
+
+debugPrint(1, $tableArg);
+
+docmd('./refreshWorker.sh -t "' . $tableArg . '"');
+
+cleanup 0; 

@@ -1,0 +1,37 @@
+<: #-*- perl -*-
+# $m80path = [{command => "embedperl" }];
+
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Metadata::Object::RTETLManager",
+			           isa => 'Metadata::Object::ETLManager',
+                                   include => [],
+                                   example =>
+q[
+    my $Metadata::Object::RTETLManager = $Metadata::Object::RTETLManager->new();   # stub example .... expand
+],
+				   description => 'Metadata::Object::RTETLManager description; stub description please expand');
+
+$po->setMembers([{name => "pollTableList",
+		  required => 1,
+                  description => "tables to monitor for edits before triggering ETL"},
+		 {name => "pollInterval",
+		  description => "poller interval in seconds",
+		  default => 60,},
+		 {name => "insertDateField",
+		  required => 1,
+		  description => "field name that marks inserted records",},
+		 {name => "updateDateField",
+		  required => 1,
+		  description => "field name that marks updated records",},
+		 {name => "model",
+		  description => "polling model .... potential extension point for custom polling models",},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    print Dumper($this);
+}

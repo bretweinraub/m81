@@ -1,0 +1,39 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Crawler::CrawlerRequest",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+    my $Crawler::CrawlerRequest = $Crawler::CrawlerRequest->new();   # stub example .... expand
+],
+				   description => 'Crawler::CrawlerRequest description; stub description please expand');
+
+$po->setMembers([{name => "URL",
+		  required => 1,
+		  description => "URL to crawl"},
+		 {name => "file",
+		  required => 1,
+		  description => "filename to crawl to"},
+		 {name => "status",
+		  default => "new",
+		  description => "stauts of crawl request"},
+		 {name => "dataSet",
+		  description => "database results set that this crawl request was derived from"},
+		 {name => "dataSetIndex",
+		  description => "index into database results set that this crawl request was derived from"},
+		 {name => 'recordIdentifier',
+		  description => 'unique text that corresponds to a human readable identifier for this record (like the "name" of something)',},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}

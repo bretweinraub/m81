@@ -1,0 +1,48 @@
+-- -*-sql-*- --
+-----------------------------------------------------------------
+-- Package:		P_TASK
+--
+-- Date:		
+--
+-- Description:		
+--
+-----------------------------------------------------------------
+--
+PROMPT Creating PACKAGE P_TASK_CONTEXT.
+CREATE OR REPLACE PACKAGE P_TASK_CONTEXT AUTHID CURRENT_USER AS
+
+  package_name CONSTANT VARCHAR(32) := 'P_TASK_CONTEXT';
+
+FUNCTION        PIVOT_DAY
+(
+        base_date        date
+)
+RETURN date;
+
+PROCEDURE     	CREATE_DATED_PARTITION_TABLE
+(
+	month		varchar2,
+	year            varchar2
+);
+
+PROCEDURE       CREATE_DATED_PARTITION_TABLES
+(
+        pivot_date_in date
+);
+
+
+PROCEDURE       CREATE_CURRENT_PARTITION_TABLE
+(
+        some_day        date
+);
+
+PROCEDURE       ARCHIVE_TABLE;
+
+
+PROCEDURE       DROP_INDICIES;
+
+PROCEDURE       DROP_TRIGGERS;
+
+PROCEDURE       REVERT;
+
+END;

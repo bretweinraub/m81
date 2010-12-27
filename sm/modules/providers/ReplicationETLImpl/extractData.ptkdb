@@ -1,0 +1,32 @@
+$files = {
+           '_</home/bweinraub/wbs/loveland/vendor/ckuru/m81/lib/perl/DB/OracleHandle.pm' => [
+                                                                                              {
+                                                                                                'expr' => undef,
+                                                                                                'value' => '1',
+                                                                                                'text' => '	    my $newColumn = $this->getTypeAsText(data => $columns{$columnName},
+',
+                                                                                                'fname' => '/home/bweinraub/wbs/loveland/vendor/ckuru/m81/lib/perl/DB/OracleHandle.pm',
+                                                                                                'type' => 'user',
+                                                                                                'line' => '620'
+                                                                                              }
+                                                                                            ],
+           '_</home/bweinraub/wbs/loveland/vendor/ckuru/m81/lib/perl/DB/DBHandle.pm' => [
+                                                                                          {
+                                                                                            'expr' => undef,
+                                                                                            'value' => '0',
+                                                                                            'text' => '	$this->createTable(name => $validName,
+',
+                                                                                            'fname' => '/home/bweinraub/wbs/loveland/vendor/ckuru/m81/lib/perl/DB/DBHandle.pm',
+                                                                                            'type' => 'user',
+                                                                                            'line' => '1209'
+                                                                                          }
+                                                                                        ]
+         };
+$expr_list = [
+               {
+                 'expr' => '$sql',
+                 'depth' => -1
+               }
+             ];
+$eval_saved_text = undef;
+$main_win_geometry = '1255x976+0+0';

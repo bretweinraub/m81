@@ -1,0 +1,34 @@
+$files = {
+           '_<./ckuru-server' => [
+                                   {
+                                     'expr' => undef,
+                                     'value' => '1',
+                                     'text' => '	$SleepTimer->reset();
+',
+                                     'fname' => './ckuru-server',
+                                     'type' => 'user',
+                                     'line' => '1948'
+                                   },
+                                   {
+                                     'expr' => undef,
+                                     'value' => '1',
+                                     'text' => '	$SleepTimer->sleep();
+',
+                                     'fname' => './ckuru-server',
+                                     'type' => 'user',
+                                     'line' => '1950'
+                                   },
+                                   {
+                                     'expr' => undef,
+                                     'value' => '1',
+                                     'text' => '    undef $skipSleep;
+',
+                                     'fname' => './ckuru-server',
+                                     'type' => 'user',
+                                     'line' => '1953'
+                                   }
+                                 ]
+         };
+$expr_list = [];
+$eval_saved_text = undef;
+$main_win_geometry = '1255x996+0+6';

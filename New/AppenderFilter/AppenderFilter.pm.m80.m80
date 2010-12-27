@@ -1,0 +1,48 @@
+<@ # -*-perl-*-
+# $m80path = [{ command => "embedperl -embedderChar @" }]
+    use Env qw(filter);
+@><: # -*-perl-*-
+# $m80path = [{ command => embedperl }]
+use Helpers::PerlObject;
+my $po = Helpers::PerlObject->new(name => 'Metadata::Filter::<@=$filter@>',
+                                  isa => 'Metadata::Filter::FieldAppender',
+                                  include => ['Metadata::Compiler::Message',
+                                              'Metadata::Utils'],
+                                  description => q!
+
+Some sample description. This Filter will append a value or object onto the end of a field in some object.
+
+
+Example:
+
+   use Metadata::Filter::<@=$filter@>;
+   
+   my $filter = new Metadata::Filter::<@=$filter@>( name => '<@=$filter@>', description => 'DESCRIPTION' );
+   ...
+!);
+
+$po->setMembers([ { name => 'member',
+                    description => 'A member.' },
+                  ] );
+
+print $po->dump();
+:>
+
+sub _new {
+    my $this = shift;
+
+    # default values for Name and Description
+    $this->setName( '<@=$filter@>' ) unless $this->getName();
+    $this->setDescription( 'DESCRIPTION' ) unless $this->getDescription();
+
+    $this->setClassMask( 'SomeObjectMask' ) unless $this->getClassMask();
+}
+
+#
+# Use the following sub routine to call $this->setAppendFieldValue() as necessary
+#
+sub __processObject {
+    my $this = shift;
+    $this->setAppendFieldValue( { fieldname => newValue } );
+}
+

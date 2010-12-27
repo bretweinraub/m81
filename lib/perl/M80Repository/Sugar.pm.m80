@@ -1,0 +1,81 @@
+<: #-*- perl -*-
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "M80Repository::Sugar",
+			           isa => 'M80Repository::M80RepositoryObject',
+                                   include => [],
+                                   example =>
+q[
+    my $Sugar = $Sugar->new();   # stub example .... expand
+],
+				   description => 'M80 build macros around Sugar CRM');
+
+$po->setMembers([
+#                 {name => "filename", 
+#		  type => "string", 
+#		  required => 1,
+#		  format => '([\/\w\d]+)\.uxf',
+#		  description => "Name of the document to generate"},
+#                 {name => "elements",
+#                  ref => 'ARRAY',
+#                  description => "Array of UXFElement objects in this document"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+    use Exporter;
+
+
+no strict ;
+@ISA = qw(Exporter);
+@EXPORT = qw(SugarDeployment);
+use strict ;
+
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+
+################################################################################
+
+sub SugarDeployment {
+   <:= $po->contract('SugarDeployment' => {description => 'Generate the m80 repository entry for a sugar repository',
+					   static => 't',
+					   getopts => [{name => 'name' ,
+							required => 't',
+						        description => 'object_name',},
+						       {name => 'host' ,
+							required => 't',
+						        description => 'host name of server',},
+						       {name => 'user' ,
+							required => 't',
+						        description => 'user name on server',},
+						       {name => 'deploy_path' ,
+							required => 't',
+						        description => 'deploy_path to installation',},
+						       {name => 'dev_path' ,
+							required => 't',
+						        description => 'devpath to src',},
+						       {name => 'apache_path' ,
+							required => 't',
+						        description => 'devpath to src',},
+						       ]}); :>
+    do {
+	my $ret = "append_variable_space([SugarDeployments],[$name])\n";
+	$ret .= "define_variable([" . $name . "_host],[$host])\n";
+	$ret .= "define_variable([" . $name . "_user],[$user])\n";
+	$ret .= "define_variable([" . $name . "_deploy_path],[$deploy_path])\n";
+	$ret .= "define_variable([" . $name . "_dev_path],[$dev_path])\n";
+	$ret .= "define_variable([" . $name . "_apache_path],[$apache_path])\n";
+	$ret .= "define_variable([" . $name . "_THIS],[$name])\n";
+#	$ret .= "m80NewCustomModule([$name],((deploy,$dev_path,make),(build,$dev_path,make)))\n";
+	$ret;
+    };
+}
+
+
+	    
+

@@ -1,0 +1,14 @@
+
+To turn on this module:
+
+- you need to add the newAutomatorModule() macro to your m80 env.  For portalperf this is :
+
+$TOP/m80repository/projects/wlperf-950-0.m80_
+
+the entry looks like
+
+newAutomatorModule(<<MODULE_NAME>>,CONTROLLER,m80var(PERF_MODULE_DIR)/businessProcesses/<<MODULE_NAME>>,<<MODULE_NAME>>)
+
+
+
+

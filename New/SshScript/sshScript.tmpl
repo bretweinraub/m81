@@ -1,0 +1,27 @@
+<: # -*-sh-*-
+use shellHelpers; # $m80path = [{command => embedperl}, {command => m4conv, chmod => '+x' }];
+use sshHelpers; 
+print shellHelpers::shellScript(getopts => "(h, -host),(u, -user)",
+				      r => [domainhome_unix, osflavor],
+				      suppressChangeQuote => true);
+:>
+
+#
+# Use this location for running any code locally before running the
+# remote actions. Good for ASSERTs or directory derivations
+# 
+
+# ASSERT
+if test -z "$_my_shell_var"; then
+    cleanup 0 "my_shell_var is not set - exiting quietly"
+fi
+
+<:= sshHelpers::sshScriptOnly() :>
+
+#
+# The code to execute remotely should be inside the sshScript tags
+# 
+
+<:= sshHelpers::endSshShellScript() :>
+
+    

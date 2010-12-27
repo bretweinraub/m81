@@ -1,0 +1,106 @@
+<: #-*- perl -*-
+# $m80path = [{command => "embedperl" }];
+
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Utils::SleepTimer",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+  my $Utils::SleepTimer = $Utils::SleepTimer->new();   # stub example .... expand
+
+  my $st = Utils::SleepTimer->new();
+
+  $debug=2;
+
+  for (my $i = 0 ; $i < 100 ; $i++) {
+      $st->getSleepVal();
+  }
+  $st->reset();
+  for (my $i = 0 ; $i < 100 ; $i++) {
+      $st->getSleepVal();
+  }
+
+  $st->reset();
+  $st->setSleepTimer(10);
+  for (my $i = 0 ; $i < 100 ; $i++) {
+      $st->getSleepVal();
+  }
+
+],
+				   description => 'Utils::SleepTimer description; stub description please expand');
+
+$po->setMembers([{name => "sleepTimer",
+		  default => "0",
+		  description  => "current value to sleep",},
+		 {name => "iterations",
+		  default => "0",
+		  description => "number of iterations at this sleep value",},]); :>
+
+<:= $po->dump(); :>
+
+my $_saveTimer; # cached sleepTimer value;
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+sub __new {
+    my $this = shift;
+    $Utils::SleepTimer::_saveTimer = $this->getSleepTimer();
+}
+
+
+################################################################################
+
+sub reset {
+   <:= $po->contract('reset' => {description => 'resets the cached value for this sleep timer',
+				 getopts => []}); :>
+    do {
+	my $resetValue = ($Utils::SleepTimer::_saveTimer ? $Utils::SleepTimer::_saveTimer : 0);
+	$this->debugPrint (1, "reseting sleep timer to $resetValue");
+
+	$this->setSleepTimer($resetValue);
+	$this->setIterations(0);
+    };
+}
+
+
+################################################################################
+
+sub getSleepVal {
+   <:= $po->contract('getSleepVal' => {description => 'returns a slowly incrementing sleep value',
+				      getopts => [
+						   ]}); :>
+    do {
+	my $sleepTimer = $this->getSleepTimer();
+	my $iterations = $this->getIterations();
+
+	if ($sleepTimer eq $iterations) {
+	    $sleepTimer++;
+	    $iterations =  0;
+	}
+	$this->setSleepTimer($sleepTimer);
+	$this->setIterations(++$iterations);
+
+	$this->debugPrint(2, "sleep timer is now $sleepTimer ($iterations)");
+	$sleepTimer;
+    };
+}
+
+
+################################################################################
+
+sub sleep {
+   <:= $po->contract('sleep' => {description => 'sleep the number of seconds associated with the timer',
+				      getopts => [
+						   ]}); :>
+    do {
+	my $sleepTimer = $this->getSleepVal();
+	$this->debugPrint (1, "sleeping $sleepTimer seconds");
+	sleep($sleepTimer);
+    };
+}
+
+1;

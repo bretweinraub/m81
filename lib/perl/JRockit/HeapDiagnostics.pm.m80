@@ -1,0 +1,82 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "JRockit::HeapDiagnostics",
+			           isa => '',
+                                   include => [JRockit::HeapStatistic],
+                                   example =>
+q[
+    my $HeapDiagnostics = $HeapDiagnostics->new();   # stub example .... expand
+],
+				   description => 'Object Built from the output of 
+jrcmd <java pid> heap_diagnostics
+');
+
+$po->setMembers([
+                 {name => "filename", 
+		  type => "string", 
+		  required => 1,
+		  description => "Name of the heap_diagnostics output file"},
+                 {name => "heapClassStats",
+                  ref => 'HASH',
+                  description => "Hash of stats on classes in the heap"},
+		 {name => "sortedOrder",
+		  ref => 'ARRAY',
+		  description => "HeapStatistics sorted by size"},
+]); 
+
+:>
+  <:= $po->dump(); :>
+
+sub _new {
+  <:= $po->dumpContract(method => "_new"); :>
+  do {
+      my %heapClassStats = ();
+      $this->setHeapClassStats( \%heapClassStats );
+
+      my @sortedOrder = ();
+      $this->setSortedOrder( \@sortedOrder);
+
+      open FILE, "< " . $this->getFilename();
+
+      my $readState = "INITIAL";
+      while (<FILE>) {
+	  my $line = $_;
+	  if (/--------- Detailed Heap Statistics: ---------/) {
+	      $readState = 'DETAILED HEAP STATISTICS';
+	      next;
+	  }
+
+	  if ($readState =~ /DETAILED/) {
+	      if ($line =~ /total ---/) {
+		  $readState = "UNKNOWN";
+	      } else {
+#		  $line =~ /(\d+\.\d+%) (\d+k)\s+(\d+)\s+[+\-](d+)k (.+)/;
+		  $line =~ /(\d+\.\d+%) (\d+)\w\s+(\d+)\s+([\+\-]\d+k) (.+)/;
+
+		  my $_hs = new JRockit::HeapStatistic (percentage => $1,
+							totalSize => $2,
+							numInstances => $3,
+							delta => $4,
+							name => $5);
+		  $heapClassStats{$5} = $_hs;
+		  push (@sortedOrder, $_hs);
+	      }
+	  }
+
+      }
+
+      close FILE;
+  };
+}
+
+#sub method {
+# remove the spaces from the tag below
+#    < : = $po->contract('method' => {description => "method description"} ); :>
+#}
+	    
+

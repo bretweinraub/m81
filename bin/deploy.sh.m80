@@ -1,0 +1,98 @@
+<: # -*-sh-*-
+use Helpers::shellHelpers; # $m80path = [{command => "embedperl"}, {command => "m4", chmod => "+x" }];
+print Helpers::shellHelpers::shellScript ( r => [srcPath,destPath],
+                                           getopts => ''); 
+:>
+
+#
+# This script evalutes the metadata for DeployableBits .... and does what it says
+#
+
+#
+# For now .... just localhost
+#
+
+checkfile -d $srcPath
+
+hostname=$(hostname -s)
+
+docmd cd $srcPath
+
+deployCmd=$(find . -maxdepth 1 | grep deployCtl | grep -v "~" | grep -v m80)
+
+printmsg deployCmd is $deployCmd
+
+if [ -n "$deployCmd" ]; then
+    printmsg found $deployCmd
+    make $deployCmd >& /dev/null # at least try
+fi
+
+deployCtlCommand () {
+    printmsg deployCtlCommand $*
+    if [ -n "$deployCmd" ]; then
+	docmd $deployCmd $1
+    fi
+}
+
+if [ -f deploy.manifest ]; then
+    grep deploy.manifest deploy.manifest
+    if [ $? -ne 0 ]; then
+	cleanup 1 deploy.manifest must reference itself \(unfortunately\)
+    fi
+    tarcommand="tar -C $srcPath -T deploy.manifest -cf -"
+else
+    tarcommand="tar -C $srcPath --exclude .svn -cf - ."
+fi
+
+if [ -n "$destUser" ]; then
+    extractCommand="tar -C $destPath --owner $destUser -xvf -"
+else
+    extractCommand="tar -C $destPath -xvf -"
+fi
+
+################################################################################
+
+deployCtlCommand pre-deploy
+
+if [ -z "${srcHost}${srcUser}${destUser}${destHost}${destGroup}" ]; then
+    show srcHost srcUser destUser destHost destGroup destPath srcPath tarcommand extractCommand
+    docmd mkdir -p $destPath
+    $tarcommand | $extractCommand
+    RC=$?
+    if [ $RC -ne 0 ]; then
+	cleanup $RC deployment failed
+    fi
+else
+    if [ -z "${srcHost}${destHost}" ]; then                                 # just user settings
+	tmpDir=/tmp/$PROGNAME.$$
+	docmd mkdir $tmpDir
+
+	cd $srcPath && $tarcommand | tar -C $tmpDir -xvf -
+	
+	docmd sudo chown -R $destUser $tmpDir
+	if [ -n "$destGroup" ]; then
+	    docmd sudo chgrp -R $destGroup $tmpDir	    
+	fi
+
+	set -x
+	cd $tmpDir && tar cvf - . | sudo tar -C $destPath -xvf -
+	if [ $? -ne 0 ]; then
+	    set +x
+	    cleanup  1 deployment command failed
+	else
+	    set +x 
+	fi
+
+	if [ -z "${DEBUG}" ]; then
+	    docmd sudo rm -rf $tmpDir
+	else
+	    printmsg skipped removal of $tmpDir as \$DEBUG is set
+	fi
+    else
+	cleanup 1 host and user settings not implemented
+    fi
+fi
+
+cleanup 0
+
+    

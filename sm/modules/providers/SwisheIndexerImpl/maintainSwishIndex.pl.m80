@@ -1,0 +1,90 @@
+<: #-*- perl -*-
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'maintainSwishIndex.pl' , 
+                                   description => 'description for maintainSwishIndex',
+                                   include => [Utils::SleepTimer],
+                                   getopts => [{ tag => 'directory:s',
+						 required => 't',
+						 description => 'directory for swish index',},
+					       { tag => "index:s",
+						 required => "t",
+						 description => "name of the index maintained",},
+					       { tag => 'pollDir:s',
+						 required => 't',
+						 default => "./allcrawled",
+						 description => "directory to poll for new changes"},
+					       { tag => "doFull",
+						 description => "always do a full index rebuild"},
+					       { tag => "sleep:s",
+						 default => "1200",
+						 description => "always sleep this number of seconds after a rebuild "},],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+use strict;
+
+chdir $directory
+    or Confess "cannot chdir to $directory";
+
+debugPrint(0, "changing directory to $directory");
+
+#
+# Poll time is derived from a file $0
+#
+
+my $pollfile = "." . basename($0) . ".poll";
+my $tmpfile = "$pollfile.tmp";
+
+debugPrint (0, "pollfile is $pollfile");
+
+sub touch {
+    my $file = shift;
+    docmd ("touch $file");
+}
+
+sub swish {
+    my $args = shift;
+    touch($tmpfile);
+
+    my $pwd = `pwd`;
+    chomp($pwd);
+    debugPrint(0, "current path is $pwd");
+    docmd ("swish-e $args");
+    docmd("mv $tmpfile $pollfile");
+}
+
+sub full {
+    swish("-c full.conf -W0");
+}
+
+my $st = Utils::SleepTimer->new(sleepTimer => ($doFull ? $sleep : 10));
+
+if (! -f $pollfile or ! -f $index) {
+    debugPrint (0, "$pollfile no found - generating full index");
+    full();
+} else {
+    debugPrint (0, "found existing poll file $pollfile");
+}
+
+while (1 eq 1) { # go
+    my $files = `find $pollDir -newer $pollfile`;
+    if ($files) {
+	debugPrint(0, "found newer files $files");
+	unless ($doFull) {
+	    swish("-u -f $index -S prog -c incremental.conf -W0 ");
+	    $st->reset();
+	} else {
+	    full();
+	    $st->reset();
+	}
+    } else {
+	debugPrint(0, "no new files");
+    }
+    $st->sleep();
+}
+
+cleanup 0; # "

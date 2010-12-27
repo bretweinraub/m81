@@ -1,0 +1,133 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'Dprofpp.pl' , 
+                                   description => 'Formatter for dprofpp output',
+                                   include => [ProfilerNode,List::Object,Data::Dumper],
+#                                   suppressRequiredVariableCheck => 't',
+                                   getopts => [
+ 					       { 
+						   tag => 'method:s',
+						   variable => '$method',
+						   description => 'method to debug',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+ 
+#print_usage() unless .... some condition;
+
+sub render 
+{
+    my $ThisNode = shift;
+    print $ThisNode->getIndentString() . $ThisNode->getMethod() . " (" . $ThisNode->getIterations() . " x " . $ThisNode->getTimePerIteration() . "s = " . $ThisNode->getTime() . "s) [". ($ThisNode->getParent() ? $ThisNode->getParent()->getMethod() : "" ) . "]\n";
+    my $list = $ThisNode->getChildren();
+
+
+#     if ($method && $ThisNode->getMethod() =~ /$method/) {
+# 	foreach $obj (@{$list->{_array}}) {
+# 	    print $obj->getMethod() . "\t";
+# 	}
+# 	print;
+#     }
+
+
+    $list->sort_by('getTimeInSeconds');
+
+#     if ($method && $ThisNode->getMethod() =~ /$method/) {
+# 	foreach $obj (@{$list->{_array}}) {
+# 	    print $obj->getMethod() . "\t";
+# 	}
+# 	print;
+#     }
+
+    $list->reverse();
+    my $count = $list->count();
+    for (my $i = 0; $i < $count ; $i++) {
+	render ($list->get($i));
+    }
+}
+
+eval {
+    while (<STDIN>) {
+	push (@lines, $_);
+    }
+
+    my $RootNode = ProfilerNode->new(indent => -1,
+				     indentString => "",
+				     method => "main",
+				     iterations => 1);
+
+    my $CurNode = $RootNode;
+
+    my $lineno=1;
+
+    foreach $line (@lines) {
+	$_=$line;
+	/(\s*)([\w:]+) x (\d+)\s+(\d+\.\d+)s/;
+
+	my $ThisNode = ProfilerNode->new( indent => length($1),
+					  indentString => "$1",
+					  method => $2,
+					  iterations => $3,
+					  time => $4);
+
+	if ($CurNode->getIndent() eq $ThisNode->getIndent()) {                      # a peer of the current node
+	    setParent(child => $ThisNode,
+		      parent => $CurNode->getParent(), 
+		      descr => "peer", 
+		      lineno => $lineno);
+	} elsif ($CurNode->getIndent() < $ThisNode->getIndent()) {                 # a child of the previous node
+
+	    setParent(child => $ThisNode,
+		      parent => $CurNode, 
+		      descr => "indent", 
+		      lineno => $lineno);
+
+	} else {
+	    my $SearchNode = $CurNode;
+	    do {
+		$SearchNode = $SearchNode->getParent();
+
+		Confess "line $lineno: logic error failed to find parent node for $line" unless $SearchNode;
+		
+		if ( $SearchNode->getIndent() < $ThisNode->getIndent()) {
+		    setParent(child => $ThisNode,
+			      parent => $SearchNode, 
+			      descr => "scan back", 
+			      lineno => $lineno);
+
+		} 
+	    } until $ThisNode->getParent();
+	}
+	$CurNode = $ThisNode;
+	$lineno++;
+    }
+
+
+    render($RootNode);
+
+};
+Confess "line $lineno: $@" if $@;
+
+sub setParent {
+    my %args = @_;
+
+    $child = $args{child};
+    $parent = $args{parent};
+    $descr = $args{descr};
+    $lineno = $args{lineno};
+
+    $child->setParent($parent);
+    $parent->addChild(node => $child);
+
+    if ($debug) {
+	print "line $lineno: node " . $child->getMethod() . " assigned to parent " . $parent->getMethod() . "($descr) : [ " . $child->getIndent() . " " . $parent->getIndent() . " ]\n";
+    }
+}
+
+cleanup 0; # "

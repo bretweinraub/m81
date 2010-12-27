@@ -1,0 +1,46 @@
+
+=pod
+
+=head1 INTERFACE NAME
+
+ETL
+
+=head2 DESCRIPTION
+
+No module documentation provided!
+
+=head1 INTERFACE DEFINITION
+
+
+=head2 extract
+
+extract data from the source system
+
+
+=head2 stage
+
+stage extracted data for transformation, if the extraction process didn't already do this
+
+
+=head2 transform
+
+transform extracted data prior to loading
+
+
+=head2 load
+
+load transformed extracted data
+
+
+=head2 crawl
+
+(re-)crawl any web sites that may be associated with this newly processed data
+
+
+=head2 postprocess
+
+postprocess transformed extracted data
+
+
+=cut
+

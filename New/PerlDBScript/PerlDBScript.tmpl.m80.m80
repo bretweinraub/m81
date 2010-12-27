@@ -1,0 +1,29 @@
+<@ # $m80path = [{command => "embedperl.pl  -embedderChar @" , }] 
+@><: #-*- perl -*- # $m80path = [{ command => embedperl, chmod => '+x' }]
+<@ use Env; @>
+
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => '<@= $script @>.pl' , 
+                                   description => '',
+                                   include => [DB::DBHandleFactory],
+                                   getopts => [
+# 					       { tag => '',
+#                                                 required => 't',
+#                                                 description => '',},
+					       ],
+                                   );
+print $ps->dump() . $ps->pod();
+:>
+
+use strict;
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+my %results = %{$dbhandle->getData(sql => "select 1 from dual")};
+
+#for (my $ndx = 0; $ndx  < $results{rows}; $ndx++) {
+#    map {
+#	eval '$main::' . $_ . ' = $results{' . $_ . '}[$ndx]';
+#    } (keys (%results));
+#}
+ 
+cleanup 0; 

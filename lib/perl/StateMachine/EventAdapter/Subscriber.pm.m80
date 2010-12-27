@@ -1,0 +1,53 @@
+<: # -*-perl-*-
+# $m80path = [{ command => embedperl }]
+use Helpers::PerlObject;
+my $po = Helpers::PerlObject->new(name => 'StateMachine::EventAdapter::Subscriber',
+				  include => [],
+                                  description => q[
+
+This is an Interface definition for subscribers in the StateMachine::EventAdapter model.
+
+],
+                                  example => q!
+This is an interface - An example of implementing it is the StateMachine::EventAdapter::SimpleSubscriber class.
+!);
+
+$po->setMembers([{ name => 'objectType', description => 'A MetaDataObject object type (class). Examples are "host", "WLDomain", etc.' },
+		 {name => 'xmlhash', 
+		  ref => HASH,
+		  required => 1,
+		  description => 'The parsed interface block from the XML config file.'},
+                 {name => 'hint', 
+		  description => 'This hint can be used by the MetaDataObject->getMapperForEventDispatch() method to determine what order to check for mapper data '},
+                 ]);
+
+$po->setInterface([ { name => 'getObjects',
+                      description => q!
+The getObjects is passed the @allObjects array (which is relative to the current StateMachine memory space).
+This method should take what it knows about the currect subscriber configuration and find all matching objects
+in the @allObjects array. It then returns those objects to the caller.
+!,
+                      getopts => [ { name => 'allObjects',
+                                     ref => ARRAY,
+                                     description => 'A reference to the @allObjects memory space for the current running StateMachine task' } ] } 
+                    ]);
+
+
+print $po->dump();
+:>
+
+
+################################################################################
+
+sub getAction {
+   <:= $po->contract('getAction' => {description => 'return an action name if defined in this xml entry',
+				      getopts => [
+				                   #{name => 'data' ,
+						   # required => 't',
+						   # description => 'data to process',},
+						   ]}); :>
+    do {
+	$this->{xmlhash}->{action};
+    };
+}
+

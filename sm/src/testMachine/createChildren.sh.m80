@@ -1,0 +1,14 @@
+<: # -*-sh-*-
+# $m80path = [{command => "embedperl.pl"}, {command => "m4", chmod => "+x" }];
+use Helpers::shellHelpers;
+
+print Helpers::shellHelpers::shellScript(r => [task_id], getopts => "(n, -nme),(c, -count)");
+:>
+
+eval $(m80 --genfuncs)
+
+x=0
+while [ $x -lt $count ]; do
+    mexec createTask.pl -task $nme -parent_task_id $task_id -debug
+    ((x=$x+1))
+done

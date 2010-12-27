@@ -1,0 +1,160 @@
+<: # -*-perl-*-
+# $m80path = [{ command => embedperl }];
+
+use Env;
+use Data::Dumper;
+
+#
+# DATA
+#
+#   General:
+#     There are 2 data structs used to create a (optional) many to many relationship.
+#     '%expansions' are either commands or aliases and a list of expansions when that
+#     command is typed. If a command is specified as the hash key, then it is not a 
+#     many to many relationship. If the command is an alias, then it should have an 
+#     entry in the '%masks' hash. This is a many to many relationship. Each of the
+#     elements in the list of %masks will take any of the elements in cooresponding
+#     list of elements in %expansions.
+
+#
+# TAB EXPANSION DEFINITIONS:
+#   when the key (of the hash) is entered on the command line, the expansions will be available.
+#   CODE REFs get expanded.
+#
+$expansions = {
+
+    # as an example - this is legit syntax.
+    somename => sub { return [1, 2, 3] }, 
+
+    # common commands that are run under the 'mexec' syntax
+    mexec => ['smtop.pl', 'dumpContext.pl','catActionLogs.sh', 'catTaskLogs.sh', 'sogv.pl'],
+
+    # 'sm_targets' is an alias that will be mapped in the mask definnitions. 
+    # it provides a list of all the statemachine task names to any command that needs them.
+    sm_targets => \&state_machine_task_names,
+
+    # 'deploy_modules' is an alias that will be mapped to commands that take one (or more)
+    # of the $ENV{deploy_MODULES} as an argument.
+    deploy_modules => \&modules_list,
+
+    #
+    # Newables is a list of the 'New' templates
+    newables => \&newables,
+
+};
+
+#
+# MASK DEFINITIONS
+#  if there are multiple commands that can resolve to a single set of expansions, then
+#  put them here.
+#
+$masks = {
+
+    # commands that that take statemachine task names as arguments
+    sm_targets => ['rt', 'runTask', 'smtop.pl', 'al', 'catActionLogs.sh', 'catTaskLogs.sh', 'smtop', 'sogv'],
+
+    # commands that take the deploy_MODULES as arguments
+    deploy_modules => ['dp','GO', 'build'],
+
+    # 'New' templates
+    newables => ['New'],
+};
+
+
+#
+# CODE BINDINGS
+#
+
+sub modules_list {
+    my @mods = split /\s+/, $deploy_MODULES; 
+    return \@mods;
+}
+
+
+sub newables {
+    my @out = ();
+#    `cd $M81_HOME && m80 --execute make`;
+    local @Newables = ();
+    use lib "$ENV{M81_HOME}/New";
+    require "$ENV{M81_HOME}/New/manifest.pl";
+    for my $new (@Newables) {
+        push @out, $new->getName;
+    }
+#    print STDERR "out is ", Dumper(\@out);
+    return \@out;
+}
+
+#
+# dynamically figure out what tasks are available in the statemachine
+# that my current m80 env is pointing at. These tasks become available 
+# state machine related completions
+#
+sub state_machine_task_names {
+    my @names = ();
+    for $mod (@{ modules_list() }) {
+        my $root = $ENV{ $mod . "_deploy_PATH" };
+        if (-f "$root/module.xml") {
+            open(M, "<$root/module.xml") || die "WTF: $root/module.xml: $!";
+            push @names, grep { s/^\s*<task\sname="(.+?)".*$/$1/ } <M>;
+            close(M);
+        }
+    }
+    return \@names;
+}
+
+
+# INTERNAL
+
+# ##########################################################################
+#
+# The rest of this is the code that puts the above hashes together and gens the template
+#
+
+sub expand_code_refs {
+    my ($hash) = @_;
+    for my $k (keys %$hash) {
+        if ( ref($hash->{$k}) eq 'CODE') {
+            $hash->{$k} = &{ $hash->{$k} }();
+        }
+    }
+}
+
+expand_code_refs($expansions);
+expand_code_refs($masks);
+
+sub f_wrapper {
+    my $k = shift;
+    my $o;
+    $o .= "function _$k" . "_completion { \n";
+    $o .= "	local cur prev options\n";
+    $o .= "	COMPREPLY=()\n";
+    $o .= "     cur=\${COMP_WORDS[COMP_CWORD]}\n";
+    $o .= "     prev=\${COMP_WORDS[COMP_CWORD-1]}\n";
+    $o .= "	COMPREPLY=( \$( compgen -W \"@_\" -- \$cur ) )\n";
+    $o .= "}\n";
+    return $o;
+}
+
+sub complete_command {
+    my ($key, $arvalues, $armasks) = @_;
+    my $o = f_wrapper($key, @$arvalues);
+    $o .= "complete -F _" . $key . "_completion -o default $key @$armasks\n\n";
+    return $o;
+}
+
+
+sub binder {
+    my $o;
+    for my $e (keys %$expansions) {
+        print STDERR "completion.sh.m80 : evaluating $e\n";
+        my $mask = $masks->{$e} if exists $masks->{$e};
+        $o .= complete_command( $e, $expansions->{$e}, $mask );
+    }
+    return $o;
+}
+:>
+
+shopt -s extglob progcomp
+
+<:=binder:> 
+

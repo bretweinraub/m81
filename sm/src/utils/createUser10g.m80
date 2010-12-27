@@ -1,0 +1,44 @@
+#!/bin/bash
+# $m80path = [{command => "embedperl.pl" , cat => true, exec => true }]
+#
+#
+# Usage:
+# env ORACLE_SYSTEM_USER=system@DBS6OR9U DA DEFAULT_TABLESPACE=APP_DATA runPath.pl -file createUser.m80
+
+<:
+use Env;
+
+$DEFAULT_TABLESPACE = "APP_DATA" unless $DEFAULT_TABLESPACE;
+$ORACLE_SYSTEM_USER = "system/database\@$CONTROLLER_SID" unless $ORACLE_SYSTEM_USER;
+
+die "set environment variable CONTROLLER_USER" unless $CONTROLLER_USER;
+die "set environment variable ORACLE_SYSTEM_USER" unless $ORACLE_SYSTEM_USER;
+:>
+
+sqlplus <:= $ORACLE_SYSTEM_USER :> <<EOF
+
+whenever sqlerror exit 1
+
+SPOOL CREATE_<:= $CONTROLLER_USER :>.$$.log
+
+CREATE USER <:= $CONTROLLER_USER :>
+  IDENTIFIED BY <:= $CONTROLLER_PASSWD :>
+  DEFAULT TABLESPACE <:= $DEFAULT_TABLESPACE :>
+  TEMPORARY TABLESPACE TEMP
+;
+
+GRANT DBA TO <:= $CONTROLLER_USER :>;
+ALTER USER <:= $CONTROLLER_USER :> DEFAULT ROLE ALL;
+
+SPOOL OFF
+
+EOF
+
+if [ $? -ne -0 ]; then
+  echo "****** FAILURE ****** maybe check CREATE_<:= $CONTROLLER_USER :>.$$.log ?" 1>&2
+  exit 1
+else 
+  echo "****** SUCCESS ******" 1>&2
+  rm CREATE_<:= $CONTROLLER_USER :>.$$.log
+fi
+

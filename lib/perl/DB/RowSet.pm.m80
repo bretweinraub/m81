@@ -1,0 +1,184 @@
+<: #-*- perl -*- 
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "DB::RowSet",
+				   include => ['DBI'],
+				   example => q{
+   use DB::OracleHandle;
+   use DB::RowSet;
+   
+   my $dbhandle = DB::OracleHandle->new(user => "$ENV{CONTROLLER_USER}",
+   				     password => "$ENV{CONTROLLER_PASSWD}",
+   				     SID => "$ENV{CONTROLLER_SID}",
+   				     host => "$ENV{CONTROLLER_HOST}",
+   				     port => "$ENV{CONTROLLER_PORT}");
+   
+   
+   my $rowset = DB::RowSet->new(dbh => $dbhandle->getDbh(),
+      			        sql => $this->getSql());
+   
+   my %results = %{$rowset->getResults()};
+
+   #
+   # Or all as one.....
+   #
+
+   my %results = %{(DB::RowSet->new(dbh => $dbhandle->getDbh(),
+   			            sql => $this->getSql()))->getResults()};
+
+
+   #
+   # Or use the ADO interface
+
+   my $routerData = $dbhandle->newRowSet(sql => "select * from aTable", lc => 't'); #use lower case columns
+
+   while ($rowset->next) {
+       $data1 = $rowset->item(0);
+       $data2 = $rowset->item('jazz');
+   }
+
+
+                                   },
+				   description => "A row set returned by a SQL query.");
+
+$po->setMembers([{name => "results", ref => "HASH",
+		  description => "results returned by the SQL query"},
+		 {name => "rows", format => '\d+',
+		  description => "number of the rows in the rowset"},
+		 {name => "fields", ref => "ARRAY",
+		  description => "An array of field names returned by the SQL query"},
+		 {name => "dbh", ref => "DBI::db", 
+		  description => "the DBI handle for the database",},
+		 {name => "sql", 
+		  description => "sql string for this rowset" },
+		 {name => "lc", 
+		  description => "apply lowercase function to all field names when storing data" },
+		 {name => "verbose", 
+		  description => "verbose STDOUT logging of sql queries"},
+                 { name => '_i',
+                   description => 'Internal variable for storing the current row that is pointed to in the RowSet' },
+                 { name => '_nextCalledOnce',
+                   description => 'Internal variable for storing the fact that the next function has set the iterator - support for different call syntax based on 1 row in the result set and many rows in the result set.' },
+		 ]); 
+
+:>
+
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do {
+        $this->execute();
+        $this->reset();
+    };
+}
+
+sub execute {
+    <:= $po->contract("execute" => {description => "execute the sql query as returned by getSql()",
+				    getopts => [],}); :>
+
+    my $results = {};
+    my $verbose = $this->getVerbose();
+
+    my $dbh = $this->getDbh();
+    
+    my $stmt; 
+
+    $this->debugPrint (1, $this->getSql());
+
+    eval {
+	$stmt = $dbh->prepare($this->getSql());
+    };
+    Confess "$@" if $@;
+
+    eval {
+	$stmt->execute
+	    or Confess "ERROR: $DBI::errstr";
+    };
+    Confess $this->getSql() . "\nthrew $@" if $@;
+
+    my @row;
+    
+    $results->{rows} = 0;
+    my $lc = $this->getLc();
+
+    my $numOfFields = $stmt->{NUM_OF_FIELDS};
+
+    for (my $i = 0; $i < $numOfFields; $i++) {
+	my $fieldName = $stmt->{NAME}->[$i];
+	$fieldName = lc($fieldName) if $lc;
+	push (@{$results->{_fields}},$fieldName);
+	$this->debugPrint (3, "processing field named $fieldName");
+    }
+    print STDERR  "\n" if $verbose;
+    eval {
+	while (@row = $stmt->fetchrow_array()) {
+	    $results->{rows}++;
+	    for (my $i = 0; $i < $numOfFields ; $i++) {
+		push (@{$results->{($lc ? lc($stmt->{NAME}->[$i]) : $stmt->{NAME}->[$i])}},
+		      $row[$i]);
+		print STDERR  $row[$i] . "\t" if $verbose;
+	    }
+	    print STDERR  "\n" if $verbose;
+	}
+    }; 
+    Confess "$@" if $@;
+    $stmt->finish();
+
+    $this->setRows($results->{rows});
+    $this->setFields($results->{_fields});
+
+    $this->setResults($results);
+
+}
+
+
+sub reset {
+    <:= $po->contract( 'reset' => { description => 'Start at the beginning of the RowSet' } ) :>
+
+    do { # emacs quoting
+        $this->{_i} = -1;
+         $this->{_nextCalledOnce} = 0;
+    };
+}
+
+
+sub next {
+    <:= $po->contract( 'next' => { description => 'get the next row in the RowSet' } ) :>
+
+    do { # emacs quoting
+        $this->{_nextCalledOnce} = 1;
+        $this->{_i}++;
+        
+        if ($this->{_i} >= $this->getRows) {
+            return 0;
+        } else {
+            return 1;
+        }
+    };
+}
+
+sub item {
+    <:= $po->contract( 'item' => { description => 'Get the data given a field name or a field index',
+                                   positionalParameters => 1
+                                   } ) :>
+
+    do { # emacs quoting
+        $this->{_i} = 0 unless $this->{_nextCalledOnce};
+        my $fieldName = shift;
+        if ($fieldName =~ /^\d+$/) { # if it is a digit, lookup the field name
+            $fieldName = ( @{ $this->getFields } )[$fieldName];
+            $this->debugPrint(1, "Derived '$fieldName' from its index in the field list");
+        }
+        $this->debugPrint(2, "getting value for $fieldName: " , $this->{results}->{$fieldName}->[$this->{_i}]);
+        return $this->{results}->{$fieldName}->[$this->{_i}];
+    };        
+}
+
+sub fields {
+    <:= $po->contract( 'fields' => { description => 'Get the list of fields' } ) :>
+    do {
+        return @{ $this->getFields };
+    };
+}

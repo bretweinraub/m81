@@ -1,0 +1,36 @@
+#!/bin/bash
+# $m80path = [{command => "embedperl.pl" , cat => true, exec => true }]
+#
+#
+# Usage:
+# env ORACLE_SYSTEM_USER=system@DBS6OR9U DA DEFAULT_TABLESPACE=APP_DATA runPath.pl -file createUser.m80
+
+
+
+sqlplus system/database@ORCL <<EOF
+
+whenever sqlerror exit 1
+
+SPOOL CREATE_qr12_dev.$$.log
+
+CREATE USER qr12_dev
+  IDENTIFIED BY qr12_dev
+  DEFAULT TABLESPACE APP_DATA
+  TEMPORARY TABLESPACE TEMP
+;
+
+GRANT DBA TO qr12_dev;
+ALTER USER qr12_dev DEFAULT ROLE ALL;
+
+SPOOL OFF
+
+EOF
+
+if [ $? -ne -0 ]; then
+  echo "****** FAILURE ****** maybe check CREATE_qr12_dev.$$.log ?" 1>&2
+  exit 1
+else 
+  echo "****** SUCCESS ******" 1>&2
+  rm CREATE_qr12_dev.$$.log
+fi
+

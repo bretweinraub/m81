@@ -1,0 +1,33 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "DW::Dimension",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+    my $DW::Dimension = $DW::Dimension->new();   # stub example .... expand
+],
+				   description => 'DW::Dimension description; stub description please expand');
+
+$po->setMembers([
+#                 {name => "filename", 
+#		  type => "string", 
+#		  required => 1,
+#		  format => '([\/\w\d]+)\.uxf',
+#		  description => "Name of the document to generate"},
+#                 {name => "elements",
+#                  ref => 'ARRAY',
+#                  description => "Array of UXFElement objects in this document"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}

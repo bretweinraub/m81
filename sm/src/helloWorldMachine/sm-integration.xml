@@ -1,0 +1,175 @@
+<!--
+    File: sm-integration.xml
+    
+    Why:  Integrates ant with the "automator" otherwise known as the "state machine"
+
+    How:  Right now there's only one entry point:
+
+    <create-sm-task assignmentDelimiter="="
+		    contextDelimiter="~~~"
+		    context="sleepVal=1~~~moreContext=1"
+		    timeout="60"
+		    tskname="sleep"
+		    pollInterval="5"/>
+
+      This is implemented as an ANT 1.6 "macrodef" .. enjoy.
+
+    References:
+    
+    	CR224361 - ANT <create-sm-task> croaks if passed only a single context value. 
+    
+  -->
+
+<project name="sm-integration">
+
+  <!--
+
+      Task: create-sm-analyzing-task
+      
+      Why:  Sometimes you want to create a task; but you don't want it to run.
+            Currently this is done by leaving the task in the "analyzing" state.
+
+    -->
+
+  <macrodef name="create-sm-analyzing-task"> <!-- depends="init" -->
+    <attribute name="tskname"/> <!-- arrrggghhh ANT dies if you use the term "taskname" ; bad bad bad bad ANT -->
+    <attribute name="assignmentDelimiter"/>
+    <attribute name="contextDelimiter"/>
+    <attribute name="context"/>
+    <sequential>
+      <taskdef name="createTask"                           classname="com.bea.antext.perf.CreateTask"/>
+      <taskdef name="pollTask"                             classname="com.bea.antext.perf.PollTask"/>
+      <taskdef name="SQLFetch"                             classname="com.bea.antext.perf.SQLFetch"/>
+
+      <property environment="ENV"/>
+
+
+      <echo>
+	tskname is @{tskname}
+	assignmentDelimiter is @{assignmentDelimiter}
+	contextDelimiter is @{contextDelimiter}
+	context is @{context}
+	timeout is @{timeout}
+	pollInterval is @{pollInterval}
+      </echo>
+
+      <property name="this.target" value="createtask(@{tskname})"/>
+
+      <echo message="automation.server.database.user ${ENV.AutomationServerUser}"/>
+      <echo message="automation.server.database.password ${ENV.AutomationServerPasswd}"/>
+      <echo message="AutomationServerURL ${ENV.AutomationServerURL}"/>
+
+      <createTask user="${ENV.AutomationServerUser}" 
+		  password="${ENV.AutomationServerPasswd}" 
+		  url="${ENV.AutomationServerURL}"
+		  driver="oracle.jdbc.driver.OracleDriver"
+		  debug="true"
+		  taskname="@{tskname}"
+		  status="analyzing"
+		  propertyName="@{tskname}.taskID"
+		  assignmentDelimiter="@{assignmentDelimiter}"
+		  contextDelimiter="@{contextDelimiter}"
+		  context="@{context}"/>
+
+      <echo message="task id is ${@{tskname}.taskID}"/>
+    </sequential>
+  </macrodef>
+
+  <!--
+
+      Task: create-sm-task
+      
+      Why:  Create A state machine Task and poll waiting it to transition to a desired state
+
+    -->
+
+  <macrodef name="create-sm-task"> <!-- depends="init" -->
+    <attribute name="tskname"/> <!-- arrrggghhh ANT dies if you use the term "taskname" ; bad bad bad bad ANT -->
+    <attribute name="assignmentDelimiter"/>
+    <attribute name="contextDelimiter"/>
+    <attribute name="context"/>
+    <attribute name="timeout"/>
+    <attribute name="pollInterval"/>
+    <attribute name="goalState"/>
+    
+    <sequential>
+      <taskdef resource="net/sf/antcontrib/antcontrib.properties"/>
+      <taskdef name="createTask"                           classname="com.bea.antext.perf.CreateTask"/>
+      <taskdef name="pollTask"                             classname="com.bea.antext.perf.PollTask"/>
+      <taskdef name="SQLFetch"                             classname="com.bea.antext.perf.SQLFetch"/>
+
+      <property environment="ENV"/>
+      <property file="common.properties" />
+
+      <echo>
+	tskname is @{tskname}
+	assignmentDelimiter is @{assignmentDelimiter}
+	contextDelimiter is @{contextDelimiter}
+	context is @{context}
+	timeout is @{timeout}
+	pollInterval is @{pollInterval}
+      </echo>
+      
+      <property name="this.target" value="createtask(@{tskname})"/>
+
+      <echo message="automation.server.database.user ${ENV.AutomationServerUser}"/>
+      <echo message="automation.server.database.password ${ENV.AutomationServerPasswd}"/>
+      <echo message="AutomationServerURL ${ENV.AutomationServerURL}"/>
+
+      <createTask user="${ENV.AutomationServerUser}" 
+		  password="${ENV.AutomationServerPasswd}" 
+		  url="${ENV.AutomationServerURL}"
+		  driver="oracle.jdbc.driver.OracleDriver"
+		  debug="true"
+		  taskname="@{tskname}"
+		  status="analyzing"
+		  propertyName="@{tskname}.taskID"
+		  assignmentDelimiter="@{assignmentDelimiter}"
+		  contextDelimiter="@{contextDelimiter}"
+		  context="@{context}"/>
+
+      <echo message="task id is ${@{tskname}.taskID}"/>
+
+      <sql driver="oracle.jdbc.driver.OracleDriver"
+           url="${ENV.AutomationServerURL}"
+           userid="${ENV.AutomationServerUser}"
+           password="${ENV.AutomationServerPasswd}">
+	update task set status='new' where task_id=${@{tskname}.taskID};
+      </sql>
+
+      <trycatch property="@{tskname}.error.message">
+	<try>
+          <pollTask 
+             user="${ENV.AutomationServerUser}" 
+             password="${ENV.AutomationServerPasswd}" 
+             url="${ENV.AutomationServerURL}"
+             name="pollForResults"
+             taskId="${@{tskname}.taskID}"
+             resultsProperty="@{tskname}.task.results"
+             errorMsgProperty="@{tskname}.task.error"
+             timeout="@{timeout}"
+             debug="true"
+             pollInterval="@{pollInterval}"
+             goalState="@{goalState}"/>
+
+          <echo message="task status is '${@{tskname}.task.results}'"/>
+          <echo message="task error message is status is '${@{tskname}.task.error}'"/>
+
+          <if>
+            <not>
+	      <equals arg1="${@{tskname}.task.results}" arg2="succeeded"/>
+	    </not>
+            <then>
+              <echo message="@{tskname} task failed -- error: '${@{tskname}.task.error}' -- skipping results fetch"/>
+            </then>
+          </if>   
+	</try>
+	
+	<catch>
+          <echo delimiter="*" message="caught error doing task create/poll/fetch -- error message: ${@{tskname}.error.message}"/>
+	</catch>
+      </trycatch>
+    </sequential>
+  </macrodef>
+
+</project>

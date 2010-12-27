@@ -1,0 +1,194 @@
+<: # -*- perl -*-
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+
+my $po = Helpers::PerlObject->new (name => "Markup::Grid",
+				   include => ["DB::RowSet"],
+				   description => "Markup Grid for creation of tabular reports based upon SQL statements"); 
+
+$po->setMembers([{ name => "sql", required => 1,
+		   description => "sql query to render into a grid",},
+		 { name => "dbh", ref => "DBI::db", required => 1,
+		   description => "the DBI handle for the database",},
+		 { name => "title", 
+		   description => "title of the grid"},
+		 { name => "rowSet", ref => "DB::RowSet",
+		   description => "results of an executed query",},
+		 ]); 
+
+$po->setMethods("render" => {description => "renders a grid in a markup format",
+			     getopts => [{ name => "markup", 
+					   required => 1,
+					   description => "rendering format",
+					   format => '(html|wiki)' },
+{ name => "formatData",
+  description => "rendering information on how to represent specific fields",},
+],},);
+
+:>
+
+<:= $po->dump(); :>
+
+
+my %markupFunctions = (tableHeader => \&tableHeader,
+		       headerCell => \&headerCell,
+		       rowFooter => \&rowFooter,
+		       rowHeader => \&rowHeader,
+		       tableItem => \&tableItem,
+		       tableFooter => \&tableFooter,
+		       );
+
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    $this->setRowSet(DB::RowSet->new(dbh => $this->getDbh(),
+				     sql => $this->getSql()));
+}
+
+sub render {
+<:= $po->dumpContract(method => "render"); :>
+
+    my $ret;
+
+    my ($title,$headerSize) = split (/:/,$this->getTitle());
+
+    $ret .= "<h$headerSize>$title</h$headerSize><br>\n" if $title;
+
+    $ret .= $this->markup(results => $this->getRowSet()->getResults(),
+			  title => $this->getSql(),
+			  format => $formatData);
+
+    $ret;
+}
+
+
+sub markup {
+    <:= $po->contract("markup" => {description => "routine for converting a SQL result set to markup",,
+				   getopts => [{name => results,
+						required =>1,
+						description => "SQL results as returnd from DB::RowSet->getResults()",
+						ref => HASH},
+					       { name => "title",
+						 description => "title for markup object",},
+					       { name => "markupFunctions" ,
+						 description => "hash representation of overried rendering functions",
+						 ref => HASH},
+					       {name => "format" ,
+						description => "custom formatting information for cell data",
+						ref => ARRAY}]}); :>
+
+    my %results = %{$results};
+    my @fields = @{$results{_fields}};
+    my $rows = $results{rows};
+    my $ret;
+
+    my %_markupFunctions = ($markupFunctions ? %{$markupFunctions} : %markupFunctions);
+
+    $ret .= &{$_markupFunctions{tableHeader}}(title => $title);
+
+    $ret .= &{$_markupFunctions{rowHeader}};
+
+    foreach my $_x (@fields) {
+	my $tmp = $_x;
+	$tmp =~ s/_/ /g;
+	$ret .= &{$_markupFunctions{headerCell}}(celldata => $tmp);
+    }
+
+    $ret .= &{$_markupFunctions{rowFooter}}();
+    
+    for (my $i = 0 ; $i < $rows ; $i++) {
+	$ret .= &{$_markupFunctions{rowHeader}}(cursorPos => $i);
+	foreach my $f (@fields) {
+	    $ret .= &{$_markupFunctions{tableItem}}(cursorPos => $i,
+						    celldata => $results{$f}[$i],
+						    rowset => \%results,
+						    field => $f,
+						    format => $format);
+	}
+	$ret .= &{$_markupFunctions{rowFooter}}();
+    }
+
+    $ret .= &{$_markupFunctions{tableFooter}}();
+    $ret;
+}
+
+
+sub tableHeader {
+    my %data = @_;
+    my $title = $data{title};
+
+    $title =~ s/\'//g; 
+    return "
+<table border='1' width='90%' align='center' summary='$title'>
+";
+}
+
+sub headerCell {
+    my %data = @_;
+
+    return "
+    <td>
+      <b>$data{celldata}</b>
+    </td>
+";
+}
+
+sub rowFooter {
+    my %data = @_;
+
+    return "
+  </tr>
+";
+
+}
+
+sub tableFooter {
+    my %data = @_;
+
+    return "
+</table>
+";
+}
+
+
+sub rowHeader {
+    my %data = @_;
+
+    return "
+  <tr>
+";
+}
+
+sub tableItem {
+    my %data = @_;
+
+    my $format = $data{format};
+    my $field = $data{field};
+    my $celldata = $data{celldata};
+    my $cursorPos = $data{cursorPos};
+    my $rowset = $data{rowset};
+
+# alternating bg color
+    my $bg = ((($cursorPos % 2) > 0)  ? 'bgcolor="#DFEFEF"' : " ") ;
+
+    foreach my $_format (@{$format}) {
+	if ($field =~ $_format->{field}) {
+	    if ($_format->{type} =~ /func/) {
+		$celldata = &{$_format->{function}}(celldata => $celldata, 
+						    cursorPos => $cursorPos, 
+						    field => $field,
+						    rowset => $rowset);
+	    } else { # sprintf
+		$celldata = sprintf ($_format->{format}, $celldata);
+		last;
+	    }
+	}
+    }
+
+    "
+    <td $bg>
+      $celldata
+    </td>
+";
+}

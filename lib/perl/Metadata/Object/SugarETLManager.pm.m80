@@ -1,0 +1,28 @@
+<: #-*- perl -*-
+# $m80path = [{command => "embedperl" }];
+
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Metadata::Object::SugarETLManager",
+			           isa => 'Metadata::Object::ETLManager',
+                                   include => [],
+                                   example =>
+q[
+    my $Metadata::Object::SugarETLManager = $Metadata::Object::SugarETLManager->new();   # stub example .... expand
+],
+				   description => 'Metadata::Object::SugarETLManager description; stub description please expand');
+
+$po->setMembers([{name => "pollTableList",
+		  required => 1,
+                  description => "tables to monitor for edits before triggering ETL"},
+		 {name => "pollInterval",
+		  description => "poller interval in seconds",
+		  default => 60,},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}

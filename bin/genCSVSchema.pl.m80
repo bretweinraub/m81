@@ -1,0 +1,54 @@
+<: #-*- perl -*-
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'parseCSV.pl' , 
+                                   description => 'description for parseCSV',
+                                   include => [CSV::CSVDocument,
+					       "File::Glob ':globally'"],
+                                   getopts => [{name => 'headerLine:s',
+						description => 'the line number that the document header appears on',},
+					       {tag => 'file:s',
+						description => 'table to analyze',},
+					       {tag => 'aggressive',
+						description => 'aggressively shorten DB field names',},						
+					       {tag => 'directory:s',
+						description => 'analyze all .csv files in a directory',},
+					       {tag => 'prefix:s',
+						description => 'generate prefixes',},],);
+print $ps->dump(); print $ps->pod();
+:>
+
+################################################################################
+
+sub processFile {
+    my $file = shift;
+    
+    my $CSVDocument = new CSV::CSVDocument(filename => $file, 
+					   debug => $debug, 
+					   headerLine => $headerLine,
+					   aggressive => $aggressive,
+					   mergeText => '\r\n');
+    $file=~ s/\.csv//g;
+    $file=~ s/.*\///g;
+    debugPrint(1, "prefix is $prefix");
+    $CSVDocument->generateSchema( tableName => $prefix . $file );
+}
+
+################################################################################
+
+do {
+    unless ($file or $directory) {
+	Warn "set -file or -directory";
+	print_usage;
+	cleanup 1;
+    }
+    if ($directory) {
+	my @csvs = <$directory/*.csv>;
+	map { processFile($_) } (@csvs);
+    } else {
+	processFile($file);
+    }
+};
+
+cleanup 0; # "

@@ -1,0 +1,19 @@
+<: # -*-sh-*-
+use Helpers::shellHelpers; # $m80path = [{command => "embedperl"}, {command => "m4", chmod => "+x" }];
+print Helpers::shellHelpers::shellScript ( r => [],
+                                           getopts => '(t,table)'); 
+:>
+
+
+printmsg table is $table
+
+set -x 
+
+tar cf - ./getData.pl | ssh bret@192.168.226.128 'echo connected to vmware >&2 ; ssh bweinraub@192.168.20.19 "echo connected to billing >&2 ; tar xf - ; PERL5LIB=~/m81/lib/perl ./getData.pl '${table}'"' > ${table}.out
+
+set +x
+
+
+cleanup 0
+
+    

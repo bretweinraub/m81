@@ -1,0 +1,35 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "StateMachine::EventAdapter::Event",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+    my $Event = $Event->new();   # stub example .... expand
+],
+				   description => 'Event For A StateMachine Interface');
+
+$po->setMembers([{name => "name", 
+		  description => "Name of this event"},
+                 {name => "mapperBase", 
+		  description => "A mapper base to be used for this event"},
+		 {name => "xmlhash", 
+		  ref => HASH,
+		  required => 1,
+		  description => "The parsed interface block from the XML config file."},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+	    
+

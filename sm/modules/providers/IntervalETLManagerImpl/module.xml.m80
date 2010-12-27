@@ -1,0 +1,57 @@
+<: # -*-perl-*- #  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+$moduleHelpers::SCOPED_MODULE = 'IntervalETLManagerImpl';
+:>
+
+<!-- begin module.xml for IntervalETLManagerImpl   -->
+
+<:
+$module{run} = {a => [{n => run,
+		       c => 'exit 0'},
+		      {n => 'IntervalETLLoop',
+		       p => 1,
+		       t => '__SUCCEEDED__',
+		       c => 'createTask.pl -ta IntervalETLManagerImpl-IntervalETLRunLoop -parent $(task.task_id)',
+		       transitions => {"ANYFAIL" => 'loopFailure',
+				       "ALLSUCCESS" => 'loopSuccess'},
+		       chain => { a => [{n => IntervalETLRunLoop,
+					 c => 'intervalSleeper.pl'},
+					{n => IntervalETLRunLoop_work,
+					 d => ['ETL-extract',
+					       'ETL-stage',
+					       'ETL-transform',
+					       'ETL-load',
+					       'ETL-postprocess',
+					       'ETL-crawl',],
+					 c => 'exit 0',
+					 t => __SUCCEEDED__,},],},},],};
+
+$module{loopSuccess} = {a => [{n => loopSuccess,
+			       c => 'recordResults.pl -result success',
+			       t => 'IntervalETLLoop_parent',},]};
+
+$module{loopFailure} = {a => [{n => loopFailure,
+			       c => 'recordResults.pl -result failue',
+			       t => 'IntervalETLLoop_parent',},]};
+:>
+
+<tasks>
+<:
+    for $m (values %module) {
+        print moduleHelpers::childTasks(%$m);
+    }
+:>
+</tasks>
+
+<actions>
+<:
+    for $m (values %module) {
+        print moduleHelpers::chainActions(%$m);
+    }
+:>
+</actions>
+
+<!-- end module.xml for IntervalETLManagerImpl -->
+
+

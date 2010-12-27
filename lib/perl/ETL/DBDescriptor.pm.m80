@@ -1,0 +1,50 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "DBDescriptor",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+    my $DBDescriptor = $DBDescriptor->new();   # stub example .... expand
+],
+				   description => 'DB Descriptor for ETL');
+
+$po->setMembers([
+#                 {name => "filename", 
+#		  type => "string", 
+#		  required => 1,
+#		  format => '([\/\w\d]+)\.uxf',
+#		  description => "Name of the document to generate"},
+#                 {name => "elements",
+#                  ref => 'ARRAY',
+#                  description => "Array of UXFElement objects in this document"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+#
+# # This is an example of how to generate a method signature:
+#
+# # REMEMBER to remove the spaces from the '< : ' below
+#
+#sub <<methodName>> {
+# 
+#    < : = $po->contract('method' => {description => "method description",
+#                                     getopts => [ { name => 'host',
+#                                                    required => t,
+#                                                    default => 'DefaultValue',
+#                                                    description => 'The name of the host that this database schema should live on' }, ] } ) :>
+#}
+#
+	    
+

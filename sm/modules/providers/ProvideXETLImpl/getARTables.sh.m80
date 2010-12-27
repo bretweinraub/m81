@@ -1,0 +1,36 @@
+<: # -*-sh-*-
+use Helpers::shellHelpers; # $m80path = [{command => "embedperl"}, {command => "m4", chmod => "+x" }];
+print Helpers::shellHelpers::shellScript ( r => [],
+                                           getopts => '(f,file),(t,tables),(-r,rails),(-n,noload)'); 
+:>
+
+if [ -z "${file}${tables}" ]; then
+    printmsg please set one of -file or -tables
+    usage
+fi
+
+if [ -n "${file}" ]; then
+    checkfile -r $file is not found or is not readable
+    tables=$(cat $file | perl -nle 's/\n//g; $x.=$_." ";END{print $x}')
+fi
+
+test -z "${tables}" && { cleanup 2 could not derive table list ; }
+
+if [ -z "${noload}" ]; then
+    printmsg beginning fetch of $tables
+    tar cf - ./getData.pl | ssh bret@192.168.226.128 'echo connected to vmware >&2 ; ssh bweinraub@192.168.20.19 "echo connected to billing >&2 ; tar xf - ; PERL5LIB=~/m81/lib/perl ./getData.pl '${tables}'"' > $PROGNAME.$$.out
+    if [ $? -ne 0 ]; then
+	cleanup 1 fetch of data failed
+    fi
+
+    docmd m80 --execute ./cloneData.pl -dataFile $PROGNAME.$$.out
+fi
+
+if [ -n "${rails}" ]; then
+    for table in $tables; do
+	mungedtable=$(echo $table | perl -MMas90::Utils -nle 'print lc(Mas90::Utils::mas90tableName(data => $_));')
+	(cd ~/dev/wbs/portal/rails && m80 --execute m80toActiveScaffold.pl -table $mungedtable)
+    done
+fi
+
+cleanup 0

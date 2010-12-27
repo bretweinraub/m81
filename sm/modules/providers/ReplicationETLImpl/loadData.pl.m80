@@ -1,0 +1,87 @@
+<: #-*- perl -*-
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'loadData.pl' , 
+                                   description => '',
+                                   include => [DB::DBHandleFactory,
+					       DB::ETLHelper],
+                                   getopts => [
+# 					       { tag => '',
+#                                                 variable => '$',
+#                                                 required => 't',
+#                                                 description => '',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+our @allObjects;
+
+my $_x=$debug;
+require "Metadata/LoadCollections.pl";
+$debug=$_x;                                                                     # LoadCollections.pl can mess with $main::debug ;
+
+use strict;
+use warnings;
+
+debugPrint(0, "this is $ENV{THIS}");
+
+my $targetTableName=$ENV{$ENV{targetRD} . "_tableName"};
+my $stageTableName = $targetTableName . "_stg";
+
+debugPrint(0, "stage table is $stageTableName");
+
+my $etlhelper = DB::ETLHelper->new(); # fetches important  metadata related to  ETLDescriptors and the like
+
+
+my $dbhandle = $etlhelper->getTargetHandle();
+
+my $stageTable = $dbhandle->newTable(name => $stageTableName, 
+				     primaryKeyName => $stageTableName . "_id");
+
+my $targetTable = $dbhandle->newTable(name => $targetTableName, 
+				      primaryKeyName => $targetTableName  . "_id");
+
+my $naturalKey = $ENV{naturalKey};
+
+debugPrint (1, "natural key is $naturalKey");
+
+$dbhandle->getDbh()->{LongReadLen} = 2147483647;                                # longest permissable value
+
+my $sql = $stageTable->genSelectSQL(dateFormat => $dbhandle->getDefaultDateFormat());
+
+my %insert ;
+my %update;
+
+if ($dbhandle->isa("DB::OracleHandle")) {
+    %insert= %{$dbhandle->getData(sql =>"$sql where $naturalKey in (select $naturalKey from $stageTableName minus select $naturalKey from $targetTableName)")};
+} else {
+    %insert= %{$dbhandle->getData(sql =>"$sql where $naturalKey not in (select $naturalKey from $targetTableName)")};
+    
+}
+%update = %{$dbhandle->getData(sql =>"$sql where $naturalKey in (select $naturalKey from $targetTableName)")};
+
+
+$targetTable->cloneSchema(from => $stageTable);
+
+if ($insert{rows} > 0) {
+    debugPrint (0, "beginning insert of new rows into $targetTableName");
+
+    $targetTable->Import(dateFormat => $dbhandle->getDefaultDateFormat(),
+			 sourceTable => $stageTable,
+			 data => \%insert);
+} 
+if ($update{rows} > 0) {
+    debugPrint (0, $update{rows} . " to update");
+
+    $targetTable->Import(dateFormat => $dbhandle->getDefaultDateFormat(),
+			 doUpdate => 't',
+			 naturalKey => $naturalKey,
+			 sourceTable => $stageTable,
+#			 ignorePrimaryKey => 1,  # should be implied by doUpdate()
+			 data => \%update);
+}
+
+cleanup 0; 

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?><umlet_diagram><element><type>com.umlet.element.custom.PackageAggregationHierarchy</type><coordinates><x>20</x><y>20</y><w>430</w><h>740</h></coordinates><panel_attributes>ETL Module Structure
+Processes
+&gt;ETLProcess
+&gt;*RunETL*
+&lt;&lt;Interfaces
+&gt;ETLManager
+&gt;Events
+&gt;*Run*
+&lt;Providers
+&gt;SugarETLManagerImpl
+PollingETLManagerImpl
+IntervalETLManagerImpl
+&lt;&lt;ETL
+&gt;Events
+&gt;*Extract*
+*Stage*
+*Transform*
+*Load*
+*Postprocess*
+&lt;Providers
+&gt;ProvideXETLImpl
+RTETLImpl
+ReplicationETLImpl
+</panel_attributes><additional_attributes></additional_attributes></element></umlet_diagram>

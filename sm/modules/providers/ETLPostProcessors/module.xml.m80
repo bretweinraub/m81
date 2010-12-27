@@ -1,0 +1,35 @@
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+$moduleHelpers::SCOPED_MODULE = 'ETLPostProcessors';
+
+:>
+
+<!-- begin module.xml for ETLPostProcessors   -->
+
+<:
+$module{WBSSolorWindsPostProcess} = {a => [{n => WBSSolorWindsPostProcess,
+					    c => 'WBSSolorWindsPostProcess.pl',
+					    t => __SUCCESS__}]};
+:>
+
+<tasks>
+<:
+    for $m (values %module) {
+        print moduleHelpers::childTasks(%$m);
+    }
+:>
+</tasks>
+
+<actions>
+<:
+    for $m (values %module) {
+        print moduleHelpers::chainActions(%$m);
+    }
+:>
+</actions>
+
+<!-- end module.xml for ETLPostProcessors -->
+
+

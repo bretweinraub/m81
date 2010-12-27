@@ -1,0 +1,27 @@
+$files = {
+           '_<./parseCSV.pl' => [
+                                  {
+                                    'expr' => undef,
+                                    'value' => '1',
+                                    'text' => '    my $CSVDocument = new CSV::CSVDocument(filename => $file, debug => $debug, mergeText => \'\\r\\n\');
+',
+                                    'fname' => './parseCSV.pl',
+                                    'type' => 'user',
+                                    'line' => 197
+                                  }
+                                ],
+           '_</home/bret/dev/m81/lib/perl/CSV/CSVDocument.pm' => [
+                                                                   {
+                                                                     'expr' => undef,
+                                                                     'value' => '1',
+                                                                     'text' => '	my @chars = unpack "(a)*", $data;
+',
+                                                                     'fname' => '/home/bret/dev/m81/lib/perl/CSV/CSVDocument.pm',
+                                                                     'type' => 'user',
+                                                                     'line' => '707'
+                                                                   }
+                                                                 ]
+         };
+$expr_list = [];
+$eval_saved_text = undef;
+$main_win_geometry = '1595x1024+0+26';

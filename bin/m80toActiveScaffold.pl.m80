@@ -1,0 +1,44 @@
+<: #-*- perl -*-
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+
+use Helpers::PerlScript;
+my $ps = Helpers::PerlScript->new( name => 'm80toActiveScaffold.pl' , 
+                                   description => 'generate a Rails Ruby on Rails scaffold from an m80 table',
+                                   include => [DB::DBHandleFactory,
+					       Rails::Generator,],
+                                   getopts => [{ tag => 'module:s',
+#						 required => 't',
+						 description => 'm80 module to convert',},
+					       { tag => "tableName:s",
+						 description => "generate for a single table name"},
+					       { tag => 'match:s',
+						 description => 'only generate for tables that match this text',},
+ 					       { tag => 'directory:s',
+						 required => 't',
+						 default => '.',
+						 description => 'rails project home directory',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+Confess "set -module or -tableName"
+    unless $module or $tableName;
+
+my $generator = new Rails::Generator (projectRoot => $directory);
+
+if ($tableName) {
+    $generator->activeScaffold(tableName => $tableName,layoutName => "default");
+} else {
+    my $dbhandle = DB::DBHandleFactory::newDBHandle();
+    my %results = %{$dbhandle->getData(sql => "select object_name from $module" . "_OBJECTS")};
+
+    debugPrint(2, "Table list is " . Dumper($results{OBJECT_NAME}));
+
+    foreach my $table (@{$results{OBJECT_NAME}}) {
+	next if ($match and not $table =~ /$match/i);
+	$generator->activeScaffold(tableName => $table,layoutName => "default");
+    }
+}
+
+cleanup 0; 

@@ -1,0 +1,53 @@
+<: #-*- perl -*- # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'recordResults.pl' , 
+                                   description => 'Writes result of a PollingETLManagerImpl loop into the ETLManager table in the controller database.',
+                                   include => [DB::DBHandleFactory],
+                                   getopts => [{ tag => 'result:s',
+                                                 required => 't',
+                                                 description => 'specify whether this loop succeeded of failed',},
+					       ],
+                                   );
+print $ps->dump() . $ps->pod();
+:>
+
+    use strict;
+
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+
+my $etlManager = $ENV{NAME};
+Confess "no etlManager name found, use -NAME or set the \$NAME environment variable.  Potentially if running outside of the state machine check your debug chassis settings"
+    unless $etlManager;
+
+eval {
+    $dbhandle->execute                                                          # could throw an error.... ignored
+	(sql => "insert into Etlmanager (etlmanager_name) values ('" . $etlManager . "')");
+};
+
+my $runDate = $ENV{runDate};
+Confess "cannot derive run date from metadata"
+    unless $runDate;
+
+if ($result =~ /success/i) {
+    $dbhandle->execute (sql => "update etlmanager set num_errors = 0, last_update = to_date ('$runDate','YYYY-MM-DD HH24:MI:SS') where etlmanager_name = '" . $etlManager . "'");
+} else {
+    $dbhandle->execute (sql => "update etlmanager set num_errors = num_errors + 1 where etlmanager_name = '" . $etlManager . "'");    
+    my %fails = %{$dbhandle->getData (sql => "select num_errors from etlmanager where  etlmanager_name = '" . $etlManager . "'")};
+    my $fails = $fails{NUM_ERRORS}[$0];
+    my $failureThreshold = $ENV{failureThreshold};
+    debugPrint(0, "current number of failures is $fails");
+    if ($failureThreshold) {
+	debugPrint(0, "failure threshold set; checking whether to fail");	
+	if ($fails > $failureThreshold) {
+	    Confess "failure threshold met $fails > $failureThreshold , failing";
+	    exit 1;
+	} else {
+	    debugPrint(0, "failure threshold not met $fails <= $failureThreshold");
+	}
+    } else {
+	debugPrint(0, "failure threshold not set; continuing");		
+    }
+}
+
+cleanup 0; 

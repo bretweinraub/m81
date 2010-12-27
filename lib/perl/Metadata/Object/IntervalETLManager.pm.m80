@@ -1,0 +1,21 @@
+<: #-*- perl -*- # $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Metadata::Object::IntervalETLManager",
+			           isa => 'Metadata::Object::ETLManager',
+                                   example => q[
+    my $Metadata::Object::IntervalETLManager = $Metadata::Object::IntervalETLManager->new();   # stub example .... expand
+],
+				   description => 'Metadata::Object::IntervalETLManager description; stub description please expand');
+
+$po->setMembers([{name => "sleepInterval",
+		  description => "sleep interval in seconds",
+		  default => 300,
+		  required => 1,},]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}

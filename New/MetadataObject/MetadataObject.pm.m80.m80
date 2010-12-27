@@ -1,0 +1,36 @@
+<@ # $m80path = [{command => "embedperl  -embedderChar @" , }] -*-perl-*- 
+@><: #-*- perl -*-
+<@ use Env; @>
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Metadata::Object::<@= $object @>",
+			           isa => 'Metadata::Object',
+                                   include => [],
+                                   example =>
+q[
+    my $<@= $object @> = $<@= $object @>->new();   # stub example .... expand
+],
+				   description => '<@= $object @> description; stub description please expand');
+
+$po->setMembers([
+#                 {name => "elements",
+#                  ref => 'ARRAY',
+#                  description => "Array of UXFElement objects in this document"},
+#  A little more complicated:
+#                 {name => "filename", 
+#		  required => 1,
+#		  format => '([\/\w\d]+)\.uxf',
+#		  description => "Name of the document to generate"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do {
+	# replace with local code.
+	1;
+    };
+}

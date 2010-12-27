@@ -1,0 +1,196 @@
+<: #-*- perl -*-
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Rails::Generator",
+			           isa => '',
+                                   include => [DB::DBHandle,
+					       DB::Table,
+					       DB::RowSet],
+                                   example =>
+q[
+    my $Generator = $Generator->new();   # stub example .... expand
+],
+				   description => 'Will generate various rails artifacts based on inputs');
+
+$po->setMembers([
+                {name => "projectRoot", 
+		 type => "string", 
+		 required => 1,
+		 description => "root of the rails project"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+
+    do {
+	my $projectRoot = $this->getProjectRoot();
+
+	chdir($projectRoot) or
+	    Confess "failed to change directory to $projectRoot";
+
+	use File::Glob ':globally';
+	my @railsfiles = <config/database.yml*>;
+
+	Confess "directory $projectRoot does not appear to be a rails project"
+	    unless $#railsfiles >= 0;
+    };
+}
+
+################################################################################
+
+sub generateModel {
+   <:= $po->contract('generateModel' => {description => 'generate a rails model class from a database  table',
+					 getopts => [{name => 'name',
+						      required  => 1,
+						      description => 'model name',},
+						     {name => 'dbhandle',
+						      ref => 'DB::DBHandle',
+						      description => 'database handle',},
+						     {name => 'force',
+						      description => 'force overwrite if the model exists.',},]}); :>
+    do {
+	$this->debugPrint(0, "$name");
+	my $railsName = railsName(data=>$name);
+	my $objectName = objectName(data=>$railsName);
+
+
+	if (-f "app/model/$railsName.rb" and not $force) {
+	    $this->debugPrint (0, "skipping $railsName, set -force to override");
+	    return;
+	} else  {
+	    $this->debugPrint(0, "generating $railsName.rb");
+	}
+
+	my $table = $dbhandle->newTable(name => $name);
+	my $RowSet = $table->getReferers();
+	my $referrals = $table->getReferrals();
+
+
+	system("cp app/models/$railsName.rb app/models/$railsName.rb.save.$$");
+	open (MODEL, "> app/models/$railsName.rb");
+	print MODEL "
+class $objectName < ActiveRecord::Base
+  set_primary_key \"" . lc($name) . "_id\"
+  set_table_name :" . lc($name) . "
+  set_sequence_name \"" . lc($name) . "_s\"
+";
+	while($RowSet->next()) {
+	    print MODEL "
+  has_many :" . lc($RowSet->item("REFERRING_TABLE")) . "s, :foreign_key => \"" . lc ($RowSet->item("REFERRING_COLUMN")) .  "\"";
+	}
+
+	while($referrals->next()) {
+	    print MODEL "
+  belongs_to :" . lc($referrals->item("REFERRED_TABLE"));
+	}
+
+	my %columns = %{$table->getColumns()};
+
+	if ($columns{resource_type} and $columns{resource_id}) {
+	    print MODEL "
+  belongs_to :resource, :polymorphic => true
+";
+	}
+
+	if ($columns{$railsName . "_name"}) {
+	    print MODEL "
+  def to_label
+    #{$railsName" . "_name}
+  end
+";
+	}
+
+
+	print MODEL "
+end
+";
+	close(MODEL);
+    };
+}
+
+################################################################################
+
+sub railsName {
+   <:= $po->contract('railsName' => {description => 'turn a db table name  into a rails name',
+				     static => 1,
+				     getopts => [{name => 'data' ,
+						  required => 't',
+						  description => 'data to process',},]}); :>
+    do {
+	debugPrint_s(1, "processing table $data");
+	my $railsName = $data;
+#	$railsName =~ s/(.+?)s$/$1/g;
+	$railsName = lc ($railsName);
+	debugPrint_s(1, "returning $railsName");
+	$railsName;
+    };
+}
+
+################################################################################
+
+sub objectName {
+   <:= $po->contract('objectName' => {description => 'turn a db table name  into a object name',
+				      static => 1,
+				      getopts => [{name => 'data' ,
+						   required => 't',
+						   description => 'data to process',},]}); :>
+    do {
+	debugPrint_s(1, "processing table $data");
+	my $objectName = $data;
+	$objectName =~ s/^([\w+])/\U$1/g;
+	$objectName =~ s/_([\w])/uc($1)/ge;
+	debugPrint_s(1, "returning $objectName");
+	$objectName;
+    };
+}
+
+################################################################################
+
+sub activeScaffold {
+   <:= $po->contract('activeScaffold' => {description => 'Generates active scaffolds artifacts based on input',
+					  getopts => [{name => 'tableName' ,
+						       required => 't',
+						       description => 'tableName to generate active scaffold for',},
+						      {name => 'layoutName' ,
+						       required => 't',
+						       description => 'layout name to generate active scaffold for',},]}); :>
+    do {
+	$this->debugPrint(1, "processing table $tableName");
+	my $railsName = railsName(data => $tableName);
+	my $objectName = objectName(data => $railsName);
+	$this->debugPrint(2, "rails model name is $railsName");	
+	docmd("ruby script/generate model $railsName -f");
+	docmd("ruby script/generate controller $railsName -f");
+	open (MODEL, "> app/models/$railsName.rb");
+	print MODEL "
+class $objectName < ActiveRecord::Base
+  set_primary_key \"" . lc($objectName) . "_id\"
+  set_table_name :" . lc($objectName) . "
+  set_sequence_name \"" . lc($objectName) . "_s\"
+  def self.inheritance_column ()
+    nil
+  end
+end
+";
+	close(MODEL);
+
+	open (CONTROLLER, "> app/controllers/" . $railsName. "_controller.rb");
+	print CONTROLLER "
+class " . $objectName . "Controller < ApplicationController
+  before_filter :authenticate
+  layout \"$layoutName\"
+  active_scaffold :$railsName do |config|
+  end
+end
+";
+	close(CONTROLLER);
+    };
+}
+
+
+

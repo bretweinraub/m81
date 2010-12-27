@@ -1,0 +1,34 @@
+m4_define(`SHELL',/bin/bash)m4_dnl ` -*-shell-script-*-
+m4_include(shell/shellScripts.m4)m4_dnl
+# $m80path = [{command => "m4", chmod => "+x" }]
+shell_load_functions(printmsg,cleanup,require,docmd,docmdi,docmdqi,checkfile)
+shell_exit_handler
+
+DIRECTORY=$(pwd)
+
+PATTERN="*"
+
+shell_getopt((d, DIRECTORY),(m, MODULE),(p, PATTERN),(D, dirvar))
+
+m4_changequote(!*!,*!*)
+
+printmsg args are $*
+
+if [ -n "${dirvar}" ]; then
+    DIRECTORY=$(eval "echo \$"${MODULE}"_"{$dirvar}) 
+else
+    if [ -n "${MODULE}" ]; then
+	DIRECTORY=$(eval "echo \$"${MODULE}"_SRC_DIR") 
+    fi
+fi
+
+docmd cd $DIRECTORY/s
+if [ -f Makefile ] ; then
+    make clean all
+fi
+
+for schedule in ${PATTERN}.s; do
+    printmsg running $schedule
+    SHELL $schedule 
+done
+

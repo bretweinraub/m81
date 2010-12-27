@@ -1,0 +1,30 @@
+<: # -*-sh-*-
+use shellHelpers; # $m80path = [{command => "embedperl"}, {command => "m4", chmod => "+x" }];
+print shellHelpers::termiteScript ( r => [M80_BDF,user,host],
+                                    getopts => '(-k,keepLogs)'); 
+:>
+
+# The following things come for free when using this template (in addtion to a shellHelpers::shellScript() )
+#
+# default functions are: 
+#     - remote_copy REMOTE_PATH LOCAL_PATH
+#     - remote_docmdi COMMAND
+#
+# default variables are:
+#     - $destination
+#
+
+
+# COPY 1 or more REMOTE FILES locally. Works recursively on directories too
+remote_copy $domainhome_unix/$NAME'*.logs' $destination/$NAME/logs
+
+# CONVERT (and persist) logging errors
+docmdi convertLogs.sh $keepLogs -d $destination/$NAME/logs
+
+# RUN a remote command
+remote_docmdi rm -rf $domainhome_unix/$NAME
+
+
+cleanup 0
+
+    

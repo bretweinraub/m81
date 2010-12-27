@@ -1,0 +1,30 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'PatchDB.pl' , 
+                                   description => '',
+                                   include => [DB::DBHandleFactory],
+                                   getopts => [
+					       { tag => 'moduleName',
+						 required => 't',
+						 description => 'describes the moduleName to be upgraded',},
+					       { tag => 'patchLevel',
+						 description => 'migrate database to the described patchlevel',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+#
+# XXX - TODO ; this program is under wraps ; seeing if ROR (rails) can perform this function w/ db::migrate.
+#
+#
+
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+my %results = %{$dbhandle->getData(sql => "select 1 from dual")};
+ 
+cleanup 0; 

@@ -1,0 +1,26 @@
+
+=pod
+
+=head1 INTERFACE NAME
+
+ETLManager
+
+=head2 DESCRIPTION
+
+No module documentation provided!
+
+=head1 INTERFACE DEFINITION
+
+
+=head2 run
+
+ETLManager run action
+
+
+=head2 stop
+
+ETLManager stop action
+
+
+=cut
+

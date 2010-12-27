@@ -1,0 +1,11 @@
+<: # -*-sh-*-
+use Helpers::shellHelpers; # $m80path = [{command => "embedperl"}, {command => "m4", chmod => "+x" }];
+print Helpers::shellHelpers::shellScript ( r => [required],
+                                           getopts => ); 
+:>
+
+ssh localhost
+
+cleanup 0
+
+    

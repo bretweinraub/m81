@@ -1,0 +1,26 @@
+<: # -*-perl-*-
+
+sub gen_file_list {
+    my $o;
+    opendir(D, ".") || die "Unable to open directory .!\n";
+    my @files =  grep { s/\.pm\.m80$// } readdir(D);       
+    closedir(D);
+    for $file (@files) {
+	$o .= "use Metadata::Filters::$file;\n";
+        $o .= "\$pga->add ($file->new(name => \"$file\" ));\n";
+    }
+    return $o;
+}
+
+$namespace = $ENV{M80PATH_FILE};
+$namespace =~ s/(\.(pl|m80))+$//;
+
+:>    
+
+
+my $pga = new PropertyGroupAggregate;
+
+*{"::<:= $namespace :>"} = $pga;
+<:=gen_file_list():>
+
+1;

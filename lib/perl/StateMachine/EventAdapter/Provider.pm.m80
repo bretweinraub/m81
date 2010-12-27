@@ -1,0 +1,97 @@
+<: #-*- perl -*-
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "StateMachine::EventAdapter::Provider",
+			           isa => '',
+                                   include => ['StateMachine::EventAdapter::SimpleSubscriber',
+                                               'StateMachine::EventAdapter::ContextSubscriber',
+                                               'StateMachine::EventAdapter::ThisIsOfTypeSubscriber'],
+                                   example =>
+q[
+    my $SimpleSubscriber = $SimpleSubscriber->new();   # stub example .... expand
+],
+				   description => 'A State Machine Provider Module');
+
+$po->setMembers([{name => "xmlhash", 
+		  ref => HASH,
+		  required => 1,
+		  description => "The parsed interface block from the XML config file."},
+		 {name => "simpleSubscribers",
+                  ref => HASH,
+                  description => "Hash of SimpleSubscriber objects keyed by object name"},
+		 {name => "contextSubscribers",
+                  ref => HASH,
+                  description => "Hash of ContextSubscriber objects keyed by object name"},
+		 {name => "thisIsOfTypeSubscribers",
+                  ref => HASH,
+                  description => "Hash of ThisIsOfTypeSubscriber objects keyed by object name"},
+		 {name => "module",
+		  description => "Name of the module that represents this provider"},
+		 ]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+
+    do { 
+	my $xml = $this->getXmlhash();
+	$this->setModule($xml->{module});
+
+        #
+        # load all the SimpleSubscriber Objects
+	my @simpleSubscribers;
+	eval {
+	    @simpleSubscribers = @{$xml->{'simple-subscribers'}[0]->{'simple-subscriber'}};
+	};
+	unless ($@) {                                                           # the XML access could fail if no simple-subscribers were defined in the XML document
+	    my $simpleSubscribersHash = {};
+
+	    foreach my $simpleSubscriber (@simpleSubscribers) {
+		my $SimpleSubscriber = StateMachine::EventAdapter::SimpleSubscriber->new(xmlhash => $simpleSubscriber);
+		$simpleSubscribersHash->{$simpleSubscriber->{object}} = $SimpleSubscriber;
+	    }
+
+	    $this->setSimpleSubscribers($simpleSubscribersHash);
+	}
+
+
+        #
+        # load all the ContextSubscriber Objects
+	my @contextSubscribers;
+	eval {
+	    @contextSubscribers = @{$xml->{'context-subscribers'}[0]->{'context-subscriber'}};
+	};
+	unless ($@) {                                                           # the XML access could fail if no simple-subscribers were defined in the XML document
+	    my $contextSubscribersHash = {};
+
+	    foreach my $contextSubscriber (@contextSubscribers) {
+		my $ContextSubscriber = StateMachine::EventAdapter::ContextSubscriber->new(xmlhash => $contextSubscriber);
+		$contextSubscribersHash->{$contextSubscriber->{object}} = $ContextSubscriber;
+	    }
+
+	    $this->setContextSubscribers($contextSubscribersHash);
+	}
+
+
+        #
+        # load all the ThisIsOfTypeSubscriber Objects
+	my @thisIsOfTypeSubscribers;
+	eval {
+	    @thisIsOfTypeSubscribers = @{$xml->{'thisisoftype-subscribers'}[0]->{'thisisoftype-subscriber'}};
+	};
+	unless ($@) {                                                           # the XML access could fail if no thisisoftype-subscribers were defined in the XML document
+	    my $thisIsOfTypeSubscribersHash = {};
+
+	    foreach my $thisIsOfTypeSubscriber (@thisIsOfTypeSubscribers) {
+		my $ThisIsOfTypeSubscriber = StateMachine::EventAdapter::ThisIsOfTypeSubscriber->new(xmlhash => $thisIsOfTypeSubscriber);
+		$thisIsOfTypeSubscribersHash->{$ThisIsOfTypeSubscriber->getObjectType} = $ThisIsOfTypeSubscriber;
+	    }
+
+	    $this->setThisIsOfTypeSubscribers($thisIsOfTypeSubscribersHash);
+	}
+
+    };
+}

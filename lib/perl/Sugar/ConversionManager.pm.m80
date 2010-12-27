@@ -1,0 +1,921 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl", chmod => "-w" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Sugar::ConversionManager",
+			           isa => '',
+                                   include => [DB::Utils,
+					       Sugar::CustomField],
+                                   example =>
+q[
+    my $ConversionManager = $ConversionManager->new();   # stub example .... expand
+],
+				   description => 'Manages Sugar Conversions and migrations');
+
+$po->setMembers([{name => "relations",
+		  description => "an array of relations"},
+		 {name => "type", 
+		  required => 1,
+		  default => "InsideSales",
+		  description => "Conversion type",},
+		 {name => "sourceKey",
+#		  required => 1,
+		  description => "primarykey of source table",},
+		 {name => "sourceTable",
+		  required => 1,
+		  description => "source table name"},
+		 {name => "sourceFields",
+		  default => '*',
+		  description => "list of fields to process from the source table",},
+		 {name => "targetKey", 
+		  required => 1,
+		  description => "primarykey of target table ",},
+		 {name => 'srcHandle' ,
+		  required => 't',
+		  description => 'database handle for the source database',},
+		 {name => 'targetHandle' ,
+		  required => 't',
+		  description => 'database handle for the target database',},
+		 {name => "targetTable", 
+		  required => 1,
+		  description => "target table name",},
+		 {name => "fieldMap", 
+		  required => 1,
+		  description => "map of field conversions",},
+		 {name => "sugarFields", 
+		  description => "special sugar field generation statements",},
+		 {name => "moduleKeys", 
+		  ref => 'HASH',
+		  description => "module keys from the conversion template",},
+		 {name => "sugarModule", 
+		  required => 1,
+		  description => "name of sugar module for code generation",},
+		 {name => "customFields", 
+		  ref => 'ARRAY',
+		  description => "array of descriptors of custom fields metadata.",},
+		 {name => 'formattedFields',
+		  ref => 'HASH',
+		  description => "map of formatted fields by position"},
+		 {name => 'maxFormattedRows',
+		  description => "max row of formatted fields by position"}]);
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+
+################################################################################
+
+sub getSelectFields {
+   <:= $po->contract('getSelectFields' => {description => 'returns a list of fields for the select statement of the sourceTable',
+					   getopts => [
+						       ]}); :>
+    do {
+	my $ret;
+	my %fieldMap = %{$this->getFieldMap()};
+	foreach my $key (keys (%fieldMap)) {
+	    my %mapDescriptor = %{$fieldMap{$key}};
+	    my $_tmp;
+	    next if $mapDescriptor{notes};
+	    $_tmp = ($mapDescriptor{type} =~ /smalldate/ ? "$key" :
+		     ($mapDescriptor{type} =~ /date/ ? "to_char($key, 'YYYY-MM-DD HH24:MI:SS')" : $key)) . " $key";
+	    $ret .= ", " if $ret;
+	    $ret .= $_tmp;
+	}
+	$ret;
+    };
+}
+
+################################################################################
+
+sub genUpdateString {
+   <:= $po->contract('genUpdateString' => {description => 'generates an update string for updating a target row with source data based on the targetKey',
+				      getopts => [
+						  {name => 'data' ,
+						   required => 't',
+						   description => 'data to process',},
+						  {name => 'custom' ,
+						   description => 'data to process',},
+						   ]}); :>
+    do {
+	my $targetTable = $this->getTargetTable() . ($custom ? "_cstm" : "");
+	my $sql = "
+update  $targetTable
+set 
+";
+	my %fieldMap = %{$this->getFieldMap()};
+
+	my $_sql;
+	foreach my $key (keys (%fieldMap)) {
+	    my %mapDescriptor = %{$fieldMap{$key}};
+	    $this->debugPrint(2, "mapDescriptor is " . Dumper(%mapDescriptor));
+	    next if $custom and ! $mapDescriptor{custom};
+	    if ($mapDescriptor{notes}) {
+		$this->debugPrint(2, "field $key skipped because " . $mapDescriptor{notes});
+		next;
+	    } 
+	    if ($custom) {
+		my $conversion = $this->equivalence(target => lc($key) . "_c",
+						    data => $data->item($key),
+						    map => \%mapDescriptor);
+		if ($conversion) {
+		    $_sql .= ",\n" if $_sql;
+		    $_sql .= $conversion;
+		}
+	    } else {
+		my $sugarField = $mapDescriptor{sugarField};
+		if ($sugarField) {
+		    if (! $mapDescriptor{primarykey}) {
+			my $conversion = $this->equivalence(target => $sugarField,
+							    data => $data->item($key),
+							    map => \%mapDescriptor);
+			if ($conversion) {
+			    $_sql .= ",\n" if $_sql;
+			    $_sql .= $conversion;
+			}
+		    }
+		}
+	    }
+	}
+	unless ($custom) {
+	    if ($this->getSugarFields()) {
+		my %sugarFields = %{$this->getSugarFields()};
+
+		foreach my $key (keys (%sugarFields)) {
+		    my $_evalstr;
+		    my $__evalstr = '$_evalstr = ' . $sugarFields{$key}->{code};
+		    eval $__evalstr;
+		    Confess "$__evalstr died with $@" if $@;
+
+		    $this->debugPrint(1, "evaled magic code for sugar field $key as $_evalstr");
+		    if ($_evalstr) {
+			$_sql .= ",\n" if $_sql;
+			$_sql .= "\t$key = " . $_evalstr;
+		    }
+		}
+	    }
+	}
+	$sql .= $_sql;
+	my $sugarKey = $this->getSugarKey (data => $data->item(uc($this->getSourceKey())));
+	$this->debugPrint (2, "sugar source key is $sugarKey");
+	$sql .= "\nwhere\t" . $this->getTargetKey() . ($custom ? "_c" : "") . " = '" . $sugarKey. "'";
+
+	$this->debugPrint(3, "EMAIL is " . $fieldMap{EMAIL});
+	$this->debugPrint(2, "mapped fields are  " . keys %fieldMap);
+	$this->debugPrint(2, "sql is $sql");
+	$sql;
+    };
+}
+
+
+################################################################################
+
+sub equivalence {
+   <:= $po->contract('equivalence' => {description => 'generates an equivalence clause as part of an update statement based on metadata',
+				      getopts => [
+						  {name => 'data' ,
+						   required => 't',
+						   description => 'data to process',},
+						  {name => 'target' ,
+						   required => 't',
+						   description => 'target field name',},
+						  {name => 'map' ,
+						   required => 't',
+						   description => 'map description',},
+						  ]}); :>
+    do {
+	my $ret;
+	$this->debugPrint(2, "args are " . Dumper(%args));
+	if ( ! $map->{type} or $map->{type} =~ /date/ or $map->{type} =~ /dropdown/i or $map->{type} =~ /text/ ) {
+	    $ret = "\t$target = " . SQLStringify(data => $map->{prepend} . $data) ;
+	} elsif ($map->{type} =~ /deleted/i) {
+	    $ret = "\t$target = " . ($data =~ /yes/i ? 1 : 0);
+	}
+# 	} elsif ($map->{type} =~ /float/) {
+# 	    $ret = "\t$target = $data" ;
+# 	}
+	$this->debugPrint (1, "skipping field $target as type $map->{type} is not implemented");
+	$ret;
+    };
+}
+
+sub firstWord {
+    my $data = shift;
+    $data =~ s/(.+?)\s.*/$1/;
+    $data;
+}
+
+sub secondWord {
+    my $data = shift;
+    $data =~ s/.+?\s(.*)/$1/;
+    $data;
+}
+
+
+################################################################################
+
+sub sugarModuleFile {
+   <:= $po->contract('sugarModuleFile' => {description => 'returns the path to sugar file',
+				      getopts => [
+						  {name => 'file' ,
+						    required => 't',
+						    description => 'data to process',},
+						  {name => 'type' ,
+						   required => 't',
+						   default => "modules",
+						    description => 'location in the sugar tree',},
+						  
+						   ]}); :>
+    do {
+	if ($type =~ /modules/) {
+	    return $ENV{SugarHtdocs_srcPath} . "/$type/" . $this->getSugarModule() . "/" . $file;
+	} elsif ($type =~ /modlang/) {
+	    return $ENV{SugarHtdocs_srcPath} . "/custom/modules/" . $this->getSugarModule() . "/language/" . $file;
+	} elsif ($type =~ /custlang/) {
+	    return $ENV{SugarHtdocs_srcPath} . "/custom/include/language/" . $file;
+	} else {
+	    Confess "unimplemented type $type";
+	}
+    };
+}
+
+use FileHandle;
+
+################################################################################
+
+sub generatedFileFH {
+    my $file = shift;
+    
+    my $fh = new FileHandle;
+    $fh->open("< $file");
+    $fh;
+}
+
+
+################################################################################
+
+sub deriveCustomFieldData {
+   <:= $po->contract('deriveCustomFieldData' => {description => 'derive all the necessary data to generate sugar data',
+				      getopts => [
+						  {name => 'doFormatting' ,
+						   description => 'says to look for cell formatting statements in the conversion map',},
+						   ]}); :>
+    do {
+	my @customFields = ();
+	my %formattedFields = ();
+	my $maxFormattedRows = 0;
+
+	my %fieldMap = %{$this->getFieldMap()};
+	my $targetTable = lc($this->getTargetTable());
+	my $srcHandle = $this->getSrcHandle();
+	my $targetHandle = $this->getTargetHandle();
+
+	foreach my $sourceKey (keys (%fieldMap)) {
+	    my %mapDescriptor = %{$fieldMap{$sourceKey}};
+	    if ($mapDescriptor{custom}) {
+		$this->debugPrint(1, "working with custom field $sourceKey");
+		my $type = $mapDescriptor{type};
+
+		my $_lckey = lc($sourceKey);
+		my $sugarKey = $_lckey . "_c";
+
+		if ($type =~ /text/ or $type =~ /dropdown/i or $type =~ /date/ or $type =~ /float/) {
+		    my $alterTableName = $targetHandle->SQLAlterString (data => $this->getCustomTable());
+		    my $alterColumnName = $targetHandle->SQLAlterString(data => lc($sugarKey));
+		    
+
+		    my $md = $srcHandle->tableMetaData(table => $this->getSourceTable(),
+						       column => $sourceKey);
+		    $this->debugPrint(2, "metadata: " . Dumper($md));
+
+		    my $dataTypeFull; 
+		    my $dataType;
+		    my $precision;
+		    my $fixedLength = $mapDescriptor{fixedLength};  # override defined length for this field
+
+		    if ($md) {
+			$dataTypeFull = $targetHandle->getTypeAsText(data => $md, 
+								     full => 't',
+								     fixedLength => $fixedLength);
+			$dataType = $targetHandle->getTypeAsText(data => $md);
+			$precision = $md->getPrecision();
+		    } else {
+			$dataTypeFull = $mapDescriptor{mysqlType};
+			my $_dataType = $dataTypeFull;
+			$_dataType =~ /(.+?)\((.+?)\)/;
+			$dataType = $1;
+			$precision = $2;
+
+		    }
+		    Confess "cannot derive data type of field $sourceKey" unless
+			$dataTypeFull and $dataType;
+
+		    my $targetKey = $targetTable . "_" . $sugarKey;
+		    my $cf = Sugar::CustomField->new(sourceKey => $sourceKey,
+						     mapDescriptor => \%mapDescriptor,
+						     type => $type,
+						     sugarKey => $sugarKey,
+						     alterTableName => $alterTableName,
+						     alterColumnName => $alterColumnName,
+						     targetHandle => $targetHandle,
+						     metaData => $md,
+						     dataType => $dataType,
+						     dataTypeFull => $dataTypeFull,
+						     targetKey => $targetKey,
+						     targetTable => $targetTable,
+						     fixedLength  => $fixedLength,
+						     precision => $precision);
+
+		    if ($doFormatting) {
+			if ($mapDescriptor{fmt}) {
+			    my ($row, $col) = split (/,/,$mapDescriptor{fmt});
+			    $this->debugPrint(1, "found formatting of $row,$col for field $sourceKey");
+			    $formattedFields{$row}{$col} = $cf;
+			    if ($mapDescriptor{genSeparator}) {
+				$cf->setGenSeparator($mapDescriptor{genSeparator});
+				$this->debugPrint(1, "setting gen separator for field $sourceKey");
+			    }
+			    $maxFormattedRows = ($row > $maxFormattedRows) ? $row : $maxFormattedRows;
+			} else {
+			    Warn "Invalid or missing formatting field for field $sourceKey " ;
+			}
+		    }
+		    push (@customFields, $cf);
+		} else {
+		    Confess "skipping unknown custom type: $type, " . Dumper(%mapDescriptor);
+		}
+	    }
+	    
+	}
+	$this->setCustomFields(\@customFields);
+	if ($doFormatting) {
+	    $this->setFormattedFields(\%formattedFields);
+	    $this->setMaxFormattedRows($maxFormattedRows);
+	}
+    };
+}
+
+################################################################################
+
+sub generateSchema {
+   <:= $po->contract('generateSchema' => {description => 'generate schema updates for custom fields',
+				      getopts => [
+						  ]}); :>
+    do {
+	my @customFields= @{$this->getCustomFields()};
+	$this->debugPrint(3, "custom fields are " . Dumper(@customFields));
+
+	my $sugarModule = $this->getSugarModule();
+	my $fileOpen;
+	my $fh = new FileHandle;
+	my $_createStmt = 0;
+	foreach my $cf (@customFields) {
+	    my %mapDescriptor = %{$cf->getMapDescriptor()};
+	    my $targetTable = $cf->getTargetTable();
+	    my $sourceKey = $cf->getSourceKey();
+	    my $type = $cf->getType();
+	    my $sugarKey = $cf->getSugarKey();
+	    my $alterTableName = $cf->getAlterTableName();
+	    my $alterColumnName = $cf->getAlterColumnName();
+	    my $md = $cf->getMetaData();
+	    my $targetKey = $cf->getTargetKey();
+	    my $dataType = $cf->getDataType(); 
+	    my $precision = $cf->getPrecision();
+	    my $fixedLength = $cf->getFixedLength();
+
+	    my $columnLength = $fixedLength ? $fixedLength : $precision;
+
+	    $this->debugPrint(1, "working with custom field $targetKey");
+
+	    $fh->open (" > " . $targetTable . "_schema.sql")
+		unless ($fileOpen++);
+	    $this->debugPrint(1, "working with custom field $sourceKey");
+	    my $alter = ($_createStmt++ ? "" : "create table $alterTableName ( id_c char(36) );\n");     
+#	    $alter .= "alter table $alterTableName drop $alterColumnName ;\n";
+	    $alter .= "alter table $alterTableName  add $alterColumnName";
+  	    $alter .= " " . $cf->getDataTypeFull() . ";\n";
+
+	    $alter .= "alter table $alterTableName  modify $alterColumnName";
+	    $alter .= " " . $cf->getDataTypeFull() . ";\n";
+
+	    $alter .= "  delete from fields_meta_data
+  where id = '$targetKey'
+  and   custom_module = '$sugarModule';
+
+  insert into fields_meta_data 
+  (
+  	id, 
+  	name, 
+  	label, 
+  	help, 
+  	custom_module, 
+  	data_type, 
+  	max_size, 
+        ext1,
+  	date_modified, 
+  	deleted, 
+  	mass_update
+  ) values (
+  	'$targetKey',
+  	'$sugarKey',
+  	'$sugarKey',
+  	'',
+  	'$sugarModule',
+";
+	    if ($type =~ /text/) {
+		$alter .= "  	'varchar',
+  	$columnLength,
+        null,
+";
+            } elsif ($type =~ /dropdown/i) {
+		$alter .= "  	'enum',
+  	null,
+        'dropdown_$sugarKey',
+";
+            } elsif ($type =~ /date/) {
+		$alter .= "  	'date',
+        null,
+        null,
+";
+            } elsif ($type =~ /float/) {
+		$alter .= "  	'float',
+        null,
+        null,
+";
+
+            } else {
+		Confess "unknown custom type $type, ". Dumper(%mapDescriptor);
+            }
+	    $alter .= "  	now(),
+  	0,
+  	1
+  );
+";
+	    $this->debugPrint(1, "$alter");
+	    print $fh $alter;
+        }
+ 	eval {close ($fh);};
+    };
+}
+
+
+################################################################################
+
+sub generateSugarCode {
+   <:= $po->contract('generateSugarCode' => {description => 'generates the sugar code for a particular sugar file',
+					     getopts => [
+						 {name => 'doFormatting' ,
+						  description => 'says to look for cell formatting statements in the conversion map',},
+						 {name => 'file' ,
+						  required => 't',
+						  description => 'sugar file to generate',},
+						 {name => 'useModule' ,
+						  description => 'look for the module name in the generated code lines',},
+						 {name => 'fileType' ,
+						  required => 't',
+						  description => 'type of sugar file to generate',},
+						 ]}); :>
+    do {
+	my @customFields= @{$this->getCustomFields()};
+
+ 	my $filename = $this->sugarModuleFile(file => $file, type=> $fileType);
+	my @lines = `cat $filename`;
+	my @preGenLines = ();
+	my @postGenLines = ();
+	my $state = 0;
+
+	my $startText = "BEGIN " . ($useModule ? $this->getSugarModule() . " "  : "" ) . "GENERATED CODE";
+	my $endText = "END " . ($useModule ? $this->getSugarModule() . " " : "" ) . "GENERATED CODE";
+	$this->debugPrint(1, "startText is $startText");
+	$this->debugPrint(1, "endText is $endText");
+
+	foreach my $line (@lines) {
+	    if ($line =~ /$startText/) {
+		$state++;
+		push (@preGenLines, $line);
+		next;
+	    } elsif ($line =~ /$endText/) {
+		push (@postGenLines, $line);
+		$state++;
+		next;
+	    } else {
+		if ($state > 1) {
+		    push (@postGenLines, $line);
+		} elsif ($state == 0) {
+		    push (@preGenLines, $line);
+		}
+	    }
+	}
+
+	Confess "Failed to find generated code line anywhere in $file of $fileType ($filename)"
+	    unless $state > 0;
+		    
+########### end parse #######
+
+<: sub suckDataFromDollarCF { '
+#### BEGIN MACRO suckDataFromDollarCF
+        	    my %mapDescriptor = %{$cf->getMapDescriptor()};
+        	    my $targetTable = $cf->getTargetTable();
+        	    my $sourceKey = $cf->getSourceKey();
+        	    my $type = $cf->getType();
+        	    my $sugarKey = $cf->getSugarKey();
+        	    my $alterTableName = $cf->getAlterTableName();
+        	    my $alterColumnName = $cf->getAlterColumnName();
+        	    my $md = $cf->getMetaData();
+        	    my $targetKey = $cf->getTargetKey();
+        	    my $dataType = $cf->getDataType(); 
+        	    my $precision = $cf->getPrecision();
+#### END MACRO suckDataFromDollarCF
+' } :>
+	
+	my @genLines = ();
+	my @javaScriptLines = ();
+
+	my $moduleKeys = $this->getModuleKeys();
+	my $ndx = $moduleKeys->{sugarCustomInfo}->{startRows}->{$file};
+
+	my %formattedFields;
+	my $maxRow = 0;
+	if ($doFormatting and ($file =~ /Edit/ or $file =~ /Detail/)) {
+	    my %formattedFields = %{$this->getFormattedFields};
+	    for (my $i = 1 ; $i <= $this->getMaxFormattedRows(); $i++) {
+		my $col = 1;
+
+		push (@genLines, "	  <tr>\n") if ($col eq 1);
+		my $cf;
+		while (exists $formattedFields{$i}{$col}) {
+		    $cf = $formattedFields{$i}{$col++};
+		    <:= suckDataFromDollarCF() :>
+
+		    dumpHtml ( ndx => $ndx++,
+			       file => $file,
+			       precision => $precision,
+			       sugarKey => $sugarKey,
+			       genLines => \@genLines,
+			       javaScriptLines =>  \@javaScriptLines,
+			       mapDescriptor => \%mapDescriptor,
+			       type => $type );
+		}
+		push (@genLines, "	  </tr>\n");
+		
+		if (defined $cf) {
+#		    $this->debugPrint(1, "looking for separator definition on key " . $cf->getSourceKey());
+		    if ($cf->getGenSeparator()) {
+			push (@genLines, '  <tr><td bgcolor="#000000"  colspan="6"></td></tr>'."\n");
+			$this->debugPrint(1, "generated a separotor after key " . $cf->getSourceKey());
+		    }
+		}
+	    }
+	} else {
+	    foreach my $cf (@customFields) {
+		<:= suckDataFromDollarCF() :>
+		if ($file =~ /Edit/ or $file =~ /Detail/) {
+		    push (@genLines, "	  <tr>\n") if ($ndx % 2);
+		    dumpHtml ( ndx => $ndx,
+			       file => $file,
+			       javaScriptLines =>  \@javaScriptLines,
+			       sugarKey => $sugarKey,
+			       precision => $precision,
+			       mapDescriptor => \%mapDescriptor,
+			       genLines => \@genLines,
+			       type => $type );
+		    push (@genLines, "	  </tr>\n") unless ($ndx++ % 2);
+		} elsif ($file =~ /en_us.lang/) {
+		    # come up w/ a label.
+		    if ($fileType =~ /modlang/) {
+			my $label = $mapDescriptor{label};
+			$label =~ s/_/ /g;
+			push (@genLines, "\$mod_strings['$sugarKey']='$label';\n");
+		    } elsif ($fileType =~ /custlang/) {
+			if ($type =~ /dropdown/i) {
+			    my $dropdown = $mapDescriptor{dropdown};
+			    push (@genLines, "\$app_list_strings['dropdown_$sugarKey']=array (\n");
+
+			    unless ($dropdown) {
+			    
+				my $rs = $this->getSrcHandle()->newRowSet(sql => "select distinct $sourceKey from " . $this->getSourceTable() . " order by $sourceKey",
+									  verbose => $main::debug);
+				while ($rs->next()){
+				    my $val = $rs->item(uc($sourceKey));
+				    push (@genLines, "'$val' => '$val',\n");
+				}
+			    } else {
+				$this->debugPrint (1, "loading dropdown list $dropdown for  field $sugarKey ");
+
+				my $filename = dirname($0) .  "/dropdowns/$dropdown.php";
+				open DROPDOWN,  "< $filename"
+				    or Confess "failed  to open $filename";
+				while (<DROPDOWN>) {
+				    push (@genLines, $_);
+				}
+				close DROPDOWN;
+			    }
+			    push (@genLines, ");\n");
+			}
+		    }
+		}
+	    }
+	    push (@genLines, "	  </tr>\n")
+		if ($ndx and not ($ndx % 2));
+	}
+
+	my $fh = new FileHandle;
+	$fh->open ( "> $filename.generated");
+
+	foreach my $line (@preGenLines,@genLines,@javaScriptLines,@postGenLines) {
+	    print $fh "$line";
+	}
+	close ($fh);
+	$this->debugPrint(1, "finished writing $filename.generated");
+    };
+}
+
+################################################################################
+
+sub getCustomTable {
+   <:= $po->contract('getCustomTable' => {description => 'returns the custom table name for this module',
+				      getopts => [
+						   ]}); :>
+    do {
+	$this->getTargetTable() . "_cstm";
+    };
+}
+
+
+################################################################################
+
+sub generateSugarCustomizations {
+   <:= $po->contract('generateSugarCustomizations' => {description => 'uses the conversion map metadata and the source data to generate all the required sugar customization code',
+				      getopts => [
+				                   {name => 'doFormatting' ,
+						    description => 'says to look for cell formatting statements in the conversion map',},
+						  ]}); :>
+    do {
+	$this->deriveCustomFieldData(doFormatting => $doFormatting);
+	$this->generateSchema();
+	$this->generateSugarCode(file => "EditView.html", fileType=> "modules", doFormatting => $doFormatting);
+	$this->generateSugarCode(file => "DetailView.html", fileType=> "modules", doFormatting => $doFormatting);
+	$this->generateSugarCode(file => "en_us.lang.php", fileType=> "modlang", doFormatting => $doFormatting);
+	$this->generateSugarCode(file => "en_us.lang.php", fileType=> "custlang", doFormatting => $doFormatting, useModule => 1);
+    };
+}
+
+
+################################################################################
+
+sub manageRelations {
+   <:= $po->contract('manageRelations' => {description => 'manage many to many relationships',
+				      getopts => [
+				                   {name => 'data' ,
+						    required => 't',
+						    description => 'data to process',},
+						   ]}); :>
+    do {
+	my %fieldMap = %{$this->getFieldMap()};
+	my @relations;
+	@relations = @{$this->getRelations()} if $this->getRelations();
+	unless (@relations) {
+# 	my $targetTable = lc($this->getTargetTable());
+# 	my $srcHandle = $this->getSrcHandle();
+# 	my $targetHandle = $this->getTargetHandle();
+
+	    @relations = ();
+	    foreach my $sourceKey (keys (%fieldMap)) {
+		my %mapDescriptor = %{$fieldMap{$sourceKey}};
+		push (@relations, $sourceKey)
+		    if $mapDescriptor{type} =~ /relation/;
+	    }
+	    $this->setRelations(\@relations);
+	}
+	foreach my $key (@relations) {
+	    my %mapDescriptor = %{$fieldMap{$key}};
+
+	    my $sourceID = $this->getSugarKey(data=>$data->item(uc($this->getSourceKey())));
+	    my $targetID = $mapDescriptor{prepend} . $data->item(uc($key));
+	    my $newID = $sourceID . "_" . $targetID;
+	    
+	    my $sql = "
+  insert into $mapDescriptor{tableName}
+  (
+    id,
+    $mapDescriptor{sourceKey},
+    $mapDescriptor{targetKey}
+  ) values (
+    '$newID',
+    '$sourceID',
+    '$targetID'
+  );";
+            my $dbhandle = $this->getTargetHandle();
+	    $dbhandle->execute(sql => "  delete from $mapDescriptor{tableName} where id = '$newID'",
+			       verbose => $main::debug);
+
+	    eval {
+		$dbhandle->execute(sql => $sql,
+				   verbose => $main::debug);
+	    };
+	    Confess "sql threw $@" if $@;
+	}
+
+    };
+}
+
+
+################################################################################
+
+sub getSugarKey {
+   <:= $po->contract('getSugarKey' => {description => 'The mangled key is the moduleName + the original source key',
+				      getopts => [{name => 'data' ,
+						   required => 't',
+						   description => 'data to process',},]}); :>
+    do {
+	return $this->getSugarModule() . "_$data";
+    };
+}
+
+
+################################################################################
+
+sub sugarNoteData {
+   <:= $po->contract('sugarNoteData' => {description => 'derives mapping from Inside Sales to Sugar Notes',
+					 static => 1,
+					 getopts => [
+						     {name => 'data' ,
+						      required => 't',
+						      description => 'data to process',},
+						     {name => 'type' ,
+						      required => 't',
+						      description => 'type of data to return',},
+						     ]}); :>
+    do {
+	my $account_id = $data->item("ACCOUNT_ID");
+	my $contact_id = $data->item("CONTACT_ID");
+	my $deal_id = $data->item("DEAL_ID");
+	my $lead_id = $data->item("LEAD_ID");
+
+	debugPrint_s (2, "account_id: $account_id ; contact_id: $contact_id ; deal_id: $deal_id ; lead_id: $lead_id");
+
+	if ($type =~ /parent_id/) {
+	    if ($deal_id) {
+		return "Cases_" . $deal_id;
+	    } elsif ($account_id) {
+		return "Accounts_" . $account_id;
+	    } elsif ($contact_id) {
+		return "Contacts_" . $contact_id;
+	    } elsif ($lead_id) {
+		return "Leads_" . $lead_id;
+	    } else {
+		debugPrint_s(1, "Failed to determine parent key for note " . $data->item("NOTE_ID"));
+	    }
+	} elsif ($type =~ /parent_type/) {
+	    if ($deal_id) {
+		return "Cases";
+	    } elsif ($account_id) {
+		return "Accounts";
+	    } elsif ($contact_id) {
+		return "Contacts";
+	    } elsif ($lead_id) {
+		return "Leads";
+	    } 
+	} else {
+	    Confess "illegal type $type passed as argument";
+	}
+    };
+}
+
+
+################################################################################
+
+sub setNoteMimeType {
+   <:= $po->contract('setNoteMimeType' => {description => 'for sugar notes, sets the mime type',
+					   static => 1,
+					   getopts => [
+						       {name => 'data' ,
+							required => 't',
+							description => 'data to process',},
+						       ]}); :>
+    do {
+	return ($data and not $data =~ /N\/A/ ? "application/x-zip-compressed" : undef);
+    };
+}
+
+
+################################################################################
+
+sub setNoteFilename {
+   <:= $po->contract('setNoteFilename' => {description => 'for sugar notes ... munge the is filename',
+					   static => 1,
+					   getopts => [
+						       {name => 'data' ,
+							required => 't',
+							description => 'data to process',},
+						       ]}); :>
+    do {
+	if (not $data =~ /N\/A/) {
+	    $data =~ s/file_[0-9]+_//g;
+	    return $data;
+	} 
+    };
+}
+
+
+################################################################################
+
+sub dumpHtml {
+   <:= $po->contract('dumpHtml' => {description => 'generate HTML block for the Sugar Detail or Edit view html file',
+				    static => 1,
+				    getopts => [
+					{name => 'ndx' ,
+					 required => 't',
+					 description => 'HTML slot index',},
+					{name => 'sugarKey' ,
+					 required => 't',
+					 description => 'sugar bean key reference',},
+					{name => 'genLines' ,
+					 required => 't',
+					 ref => 'ARRAY',
+					 description => 'reference to the generated lines array.  Data is pushed onto this reference',},
+					{name => 'javaScriptLines' ,
+					 required => 't',
+					 ref => 'ARRAY',
+					 description => 'reference to java  script code to be dumped at the end of the file',},
+					{name => 'type' ,
+					 required => 't',
+					 description => 'type of field (text,dropdown,date,etc)',},
+					{name => 'file' ,
+					 required => 't',
+					 description => 'sugar file that is being generated (edit, detail, etc).',},
+					{name => 'precision' ,
+					 required => 't',
+					 description => 'precision derived for this field',},
+					{name => "mapDescriptor",
+					 required => t,
+					 description => "descriptor map from the conversion map file",},
+					]}); :>
+    do {
+	debugPrint_s(2, "genLines: " . Dumper($genLines));
+	if ($file =~ /Edit/) {
+	    push (@{$genLines}, '	    <td class="dataLabel" colspan="1"><span sugar=\'slot' . $ndx . '\'>{MOD.' . $sugarKey . '}</span sugar=\'slot\'></td>' . "\n");
+	    
+	    if ($type =~ /text/) {
+		my $columnLength = $mapDescriptor->{fixedLength} ? $mapDescriptor->{fixedLength} : $precision;
+		push (@{$genLines}, "	    <td class=\"dataField\" colspan=\"1\"><span sugar='slot" . $ndx . "b'><input name=\"$sugarKey\" type=\"text\" tabindex='1' size='" . ($columnLength > 30 ? 30 : $columnLength) . "' maxlength='$columnLength' value=\"{" . uc ($sugarKey) . "}\"></span sugar='slot'></td>\n");
+	    } elsif ($type =~ /dropdown/i) {
+		push (@{$genLines}, "	    <td  class=\"dataField\" colspan=\"1\"><span sugar='slot" . $ndx . "b'><select name=\"$sugarKey\" title=\"{".uc($sugarKey)."_HELP}\">{OPTIONS_".uc($sugarKey)."}</select></span sugar='slot'></td>\n");
+	    } elsif  ($type =~ /date/i) {
+		push (@{$genLines}, "       <td class=\"dataField\"><span sugar='slot" . $ndx . "b'> <input name='" . lc($sugarKey) . "' id='" . lc($sugarKey) . "' onblur=\"parseDate(this, '{CALENDAR_DATEFORMAT}');\" tabindex='1' maxlength='10' size='11' {READONLY} type=\"text\" value=\"{" . uc($sugarKey) . "}\"> <img src=\"themes/{THEME}/images/jscalendar.gif\" alt=\"{APP.LBL_ENTER_DATE}\"  id=\"" . lc($sugarKey) . "_trigger\" align=\"absmiddle\"> <span class=\"dateFormat\">{USER_DATEFORMAT}</span></span sugar='slot'></td>\n");
+
+		# generate java script calendar for date fields.
+		push (@{$javaScriptLines}, "
+<script type=\"text/javascript\">
+Calendar.setup ({
+	inputField : \"" . lc($sugarKey) . "\", ifFormat : \"{CALENDAR_DATEFORMAT}\", showsTime : false, button : \"" . lc($sugarKey) . "_trigger\", singleClick : true, step : 1
+});
+</script>
+<script type=\"text/javascript\">
+	
+function set_" . lc($sugarKey) . "_values(form) {
+	if (form." . lc($sugarKey) . "_flag.checked) {
+		form." . lc($sugarKey) . "_flag.value='on';
+		form." . lc($sugarKey) . ".value=\"\";
+		form.time_start.value=\"\";
+		form." . lc($sugarKey) . ".readOnly=true;
+		form.time_start.readOnly=true;
+		if(typeof(form.start_meridiem) != 'undefined') form.start_meridiem.disabled=true;
+		document.images." . lc($sugarKey) . "_trigger.width = 18;
+		document.images." . lc($sugarKey) . "_trigger.height = 18;
+	}
+	else {
+		form." . lc($sugarKey) . "_flag.value='off';
+		form." . lc($sugarKey) . ".readOnly=false;
+		form.time_start.readOnly=false;
+		if(typeof(form.start_meridiem) != 'undefined') form.start_meridiem.disabled=false;
+		document.images." . lc($sugarKey) . "_trigger.width = 18;
+		document.images." . lc($sugarKey) . "_trigger.height = 18;
+	}
+}
+
+set_" . lc($sugarKey) . "_values(document.EditView);
+</script>
+");
+		
+	    } else  {
+		Confess "unknown type $type";
+	    }
+	} elsif ($file =~ /Detail/) {
+	    
+	    push (@{$genLines}, "  <td  valign=\"top\" valign=\"top\" class=\"tabDetailViewDL\" colspan=\"1\"><span sugar='slot" . $ndx . "'>{MOD.$sugarKey}</span sugar='slot'></td>\n");
+	    push (@{$genLines}, "  <td  class=\"tabDetailViewDF\" colspan=\"1\"><span sugar='slot" . $ndx . "b'>{" . uc($sugarKey). "}</span sugar='slot'></td>\n");
+	} else {
+	    Confess "Unknown file type $file";
+	}
+	
+	debugPrint_s(2, "genLines (after): " . Dumper($genLines));
+    };
+}
+

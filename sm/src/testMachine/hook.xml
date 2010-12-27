@@ -1,0 +1,58 @@
+<ChainGang name="$(env.M80_BDF)" 
+	   wwwroot="/var/www/html/$(env.M80_BDF)/taskData"
+	   urlbase="/$(env.M80_BDF)/taskData">
+
+  <ChainDB username="$(env.CONTROLLER_USER)" 
+	   password="$(env.CONTROLLER_PASSWD)" 
+	   port="$(env.CONTROLLER_PORT)"
+	   host="$(env.CONTROLLER_HOST)"
+	   sid="$(env.CONTROLLER_SID)"/>
+
+  <module>
+    <actions>
+      <action name="loadCollections"
+	      command="exit 0">
+	<transitionMap>
+	  <transition type="returnCode" value="0" code="$thistask->transitionTo(nextaction => __SUCCESS__, pop => true)"/>
+	  <transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(__FAILED__))"/>
+	</transitionMap>
+      </action> 
+
+      
+      <action name="hooktest1"
+	      command="exit 0">
+	<transitionMap>
+	  <transition type="returnCode" value="0"
+                      code="$thistask->transitionTo(nextaction => $thistask->fetchHook(startLifecycleStep, nextAction) , callback => $thistask->getProperty(actionname))">
+            <scope field="$(hookhistory.startLifecycleStep.succeeded)" value="^$"/>
+	  </transition>
+
+	  <transition type="returnCode"
+		      value="0" 
+		      code="$thistask->transitionTo(q(myhook2))"/>
+
+	</transitionMap>
+      </action>
+
+
+      <action name="nextAction"
+	      command="exit 0">
+	<transitionMap>
+	  <transition type="returnCode"
+		      value="0" 
+		      code="$thistask->transitionTo(q(__SUCCESS__))"/>
+	</transitionMap>
+      </action>
+
+      <action name="myhook2"
+	      command="exit 0">
+	<transitionMap>
+	  <transition type="returnCode"
+		      value="0" 
+		      code="$thistask->transitionTo(q(__SUCCESS__))"/>
+	</transitionMap>
+      </action>
+
+    </actions>
+  </module>
+</ChainGang>

@@ -1,0 +1,35 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'MySQLTest.pl' , 
+                                   description => '',
+                                   include => ['DBI',
+					       'DB::MySQLHandle',
+					       'DB::DBHandleFactory'],
+                                   getopts => [
+# 					       { tag => '',
+#                                                required => 't',
+#                                                description => '',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+my %results = %{$dbhandle->getData(sql => "select 1 from dual")};
+
+my $mysqlhandle = DB::MySQLHandle->new(user => "root",
+				       password => "root",
+				       host => "127.0.0.1",
+				       database => "sugarcrm",
+				       port => 3307);
+
+my %accounts = %{$mysqlhandle->getData(sql => "select * from accounts")};
+
+print Dumper(%accounts);
+
+cleanup 0; 

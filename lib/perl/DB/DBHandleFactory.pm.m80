@@ -1,0 +1,104 @@
+<: #-*- perl -*-
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "DB::DBHandleFactory",
+			           isa => '',
+                                   include => [DB::DBHandle,
+					       DB::MySQLHandle,
+					       DB::SQLServerHandle,
+					       DB::OracleHandle,],
+                                   example =>
+q[
+    my $DBHandleFactory = $DBHandleFactory->new();   # stub example .... expand
+
+#
+# The following will use your m80 metadata to generate a db handle for you.
+#
+    my $dbhandle = DB::DBHandleFactory::newDBHandle();
+
+],
+				   description => 'Constructs a DB::DBHandle object based on the datatype requested.');
+
+$po->setMembers([
+#                 {name => "filename", 
+#		  type => "string", 
+#		  required => 1,
+#		  format => '([\/\w\d]+)\.uxf',
+#		  description => "Name of the document to generate"},
+#                 {name => "elements",
+#                  ref => 'ARRAY',
+#                  description => "Array of UXFElement objects in this document"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+
+################################################################################
+
+sub newDBHandle {
+   <:= $po->contract('newDBHandle' => {description => 'Generate a new DBHandle based on metadata available.',
+ 				       static => 't',
+				       getopts => [
+				                   {name => 'heuristic' ,
+						    required => 't',
+						    default => 'traditional m80',
+						    description => 'data to process',},
+				                   {name => 'namespace' ,
+						    description => 'm80 namespace to query for DB info',},
+						   ]}); :>
+    do {
+	# get clever and figure out the correct Object Handle to instantiate.
+	my $ret;
+	if ($namespace) {
+	    debugPrint_s(1,"searching for db info of $namespace");
+	    my $type = $ENV{$namespace . "_type"};
+	    Confess "database type not derivable from metadata.  Does an object by the name of $namespace exist?  Is it a Database object?"
+		unless $type;
+	    debugPrint_s(2,"derived db type as $type");
+	  DBTYPE: {
+	      $type =~ /mysql/ && do {
+		  debugPrint_s(2,"build mysql db from $namespace");
+		  $ret = DB::MySQLHandle->new(namespace => $namespace);
+		  last DBTYPE;
+	      };
+	      $type =~ /oracle/ && do {
+		  debugPrint_s(2,"build oracle db from $namespace");
+		  $ret = DB::OracleHandle->new(namespace => $namespace);
+		  last DBTYPE;
+	      };
+	      $type =~ /sqlserver/ && do {
+		  debugPrint_s(2,"build sqlserver db from $namespace");
+		  $ret = DB::SQLServerHandle->new(namespace => $namespace);
+		  last DBTYPE;
+	      };
+	      
+	      Confess "DB of type $type not implemented";
+	  };
+	    Confess "failed to derive your database type information from the environment.  Is $namespace valid DB info in your m80 environment?"
+		unless $ret;
+	    debugPrint_s(2,"handle is ". Dumper($ret));
+	    return $ret;
+	}
+	else {
+	  SWITCH: {
+	      $heuristic =~ /traditional m80/ && do {
+		  if ($ENV{CONTROLLER_SID}) {
+		      debugPrint_s (2, "Assuming Oracle since CONTROLLER_SID is found in the environment");
+		      $ret = DB::OracleHandle->new(namespace => "CONTROLLER");
+		  }
+		  last SWITCH;
+	      };
+	  };
+	    Confess "failed to derive your database information from the environment.  Maybe you need to run this command with 'mexec' or 'm80 --execute'"
+		unless $ret;
+	}
+	return $ret;
+    };
+}

@@ -1,0 +1,16 @@
+$files = {
+           '_</home/bret/dev/m81/lib/perl/DB/ETLHelper.pm' => [
+                                                                {
+                                                                  'expr' => undef,
+                                                                  'value' => '1',
+                                                                  'text' => '	my $sourceNamespace=$ENV{$ENV{sourceDB} . "_m80namespace"};
+',
+                                                                  'fname' => '/home/bret/dev/m81/lib/perl/DB/ETLHelper.pm',
+                                                                  'type' => 'user',
+                                                                  'line' => '973'
+                                                                }
+                                                              ]
+         };
+$expr_list = [];
+$eval_saved_text = undef;
+$main_win_geometry = '1255x996+0+6';

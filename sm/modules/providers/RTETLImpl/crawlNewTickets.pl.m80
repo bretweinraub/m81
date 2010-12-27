@@ -1,0 +1,61 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'crawlNewTickets.pl' , 
+                                   description => '',
+                                   include => [DB::DBHandleFactory],
+                                   getopts => [
+ 					       { tag => 'crawlDir:s',
+                                                 required => 't',
+                                                 description => 'where these rt tickets get crawled to',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+use strict;
+
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+
+my %results = %{$dbhandle->getData(sql => "select id, to_char (lastupdated, 'YYYY/MM/DD HH24:MI:SS') lastupdated, to_char (created, 'YYYY/MM/DD HH24:MI:SS') created from rtticket", lc => 1)};
+
+debugPrint (2,  Dumper(%results));
+
+my @recrawl = ();
+
+for (my $i=0; $i < $results{rows}; $i++) {
+    debugPrint (1, "processing row $i");
+    my $lastupdated = $results{lastupdated}[$i];
+    my $id = $results{id}[$i];
+    debugPrint(1,"lastupdated is $lastupdated");
+    my $crawlFile = $crawlDir . "/$id.html";
+    debugPrint(1, "comparing $crawlFile");
+    
+    my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,
+	$atime,$mtime,$ctime,$blksize,$blocks)
+	= stat($crawlFile) || do {
+	    debugPrint (1, "adding id to the crawl list since the $crawlFile did not exist");
+	    push (@recrawl, $id);
+	};
+    
+
+    debugPrint(1, "mtime is $mtime");
+
+    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst)
+	= gmtime($mtime);
+    
+    debugPrint(1, "$year/$mon/$mday");
+
+}
+
+foreach my $id (@recrawl) {
+    debugPrint (0, "(re)crawling $id");
+    
+}
+
+
+cleanup 0; 

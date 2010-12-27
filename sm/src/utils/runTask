@@ -1,0 +1,73 @@
+#!/bin/bash 
+
+# =pod
+
+# =head1 NAME
+
+# runTask - simple interface to statemachine
+
+# =head1 SYNOPSIS
+
+# env MD_LIBRARY_GREPSTRING=somefile runTask <taskname> [extra context]
+
+# =head1 DESCRIPTION
+
+# Given the metadata and the name of the task to run against, create a task that will
+# do that work. The assumption is that the metadata has been generated and|or is contained
+# in a single file. This script will do it's best to find the file in the deployed
+# metadata directories. It finds files matching your grep string (with a grep command)
+# in the m81perlLib_DEPLOY_DIR.
+
+# Extra context should be specified with spaces between them:
+
+#   runTask someTestTaskName context1=data1 context2=data2
+
+
+# =cut
+
+eval $(m80 --export)
+
+if test -n "$MD_LIBRARY" && test -z "$MD_LIBRARY_GREPSTRING"; then
+    MD_LIBRARY_GREPSTRING=$MD_LIBRARY;
+fi
+
+if test -z "$MD_LIBRARY_GREPSTRING"; then
+    echo "Set \$MD_LIBRARY_GREPSTRING ... this the name of your collection (or a grep string)"
+    exit 1
+fi
+
+if test -z "$1"; then
+    echo "Specify a taskname to run"
+    exit 1
+fi
+
+tmp=`(cd ${m81perlLib_DEPLOY_DIR} && find . -type 'f' | grep -v '~' | grep ${MD_LIBRARY_GREPSTRING} | wc -l)`
+if test $tmp -gt 1; then
+    echo "Error!"
+    echo "specify a grep string that will further reduce the search"
+    echo " ------ "
+    for file in `(cd ${m81perlLib_DEPLOY_DIR} && find . -type 'f' | grep -v '~' | grep ${MD_LIBRARY_GREPSTRING})`; do
+        echo $file
+    done
+    exit 1
+elif test $tmp -eq 0; then
+    echo "Error!" >&2
+    echo "Unable to find a file matching $MD_LIBRARY" >&2
+    echo " ------ " >&2
+fi
+
+name=`(cd ${m81perlLib_DEPLOY_DIR} && find . -type 'f' | grep -v '~' | grep ${MD_LIBRARY_GREPSTRING})`
+
+taskName=$1; shift
+context=''
+if test -n "$*"; then
+    context=~~~`echo "$*" | perl -ple 's/\s/~~~/'`
+fi
+
+echo "createTask.pl -task $taskName -status new -contextSeperator ~~~ -context collections=${m81perlLib_DEPLOY_DIR}/${name}${context}"
+createTask.pl -task $taskName -status new -contextSeperator ~~~ -context collections=${m81perlLib_DEPLOY_DIR}/${name}${context}
+
+
+# Local Variables:
+# mode: shell-script
+# End:

@@ -1,0 +1,66 @@
+<: 
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "UMLet::UXFElement",
+				   description => "A UXF Element");
+
+$po->setMembers([{name => "type", 
+		  type => "string", 
+		  format => '[\w\.]+',
+                  required => 1,
+		  description => "type of UXF element"},
+                 {name => "x",
+                  description => "x coordinate for this element",
+                  required => 1,
+                  type => "string",
+                  format => '\d+',},
+                 {name => "y",
+                  required => 1,
+                  description => "y coordinate for this element",
+                  type => "string",
+                  format => '\d+',},
+                 {name => "h",
+                  required => 1,
+                  description => "height of this element",
+                  type => "string",
+                  format => '\d+',},
+                 {name => "w",
+                  required => 1,
+                  description => "width of this element",
+                  type => "string",
+                  format => '\d+',},
+                 {name => "text",
+                  description => "The text(content) portion of this element",
+                  type => "string",},
+                ]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+sub dump {
+    <:= $po->contract('dump' => {
+	description => "returns a UXF Element to the caller",
+    },); :>
+
+    my $ret="";
+    
+    $ret .= "<element><type>" . $this->getType() . "</type><coordinates><x>" . $this->getX() . 
+	"</x><y>" . $this->getY() . "</y><w>" . $this->getW() . "</w><h>" . $this->getH() . 
+	"</h></coordinates><panel_attributes>\n";
+
+    $ret .= $this->getText();
+
+    $ret .= '</panel_attributes><additional_attributes></additional_attributes></element>
+';
+
+    return $ret;
+}
+
+
+
+

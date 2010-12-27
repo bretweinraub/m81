@@ -1,0 +1,38 @@
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+$moduleHelpers::SCOPED_MODULE = 'StateMachineBase';
+
+:>
+
+<!-- begin module.xml for StateMachineBase   -->
+
+<:
+
+
+$module{initialize} = {a => [{n => initialize,
+			      c => 'LoadMetadata.pl -noappend -debug -debug',
+			      pop => true,
+			      t => __SUCCESS__}]};
+:>
+
+<tasks>
+<:
+    for $m (values %module) {
+        print moduleHelpers::childTasks(%$m);
+    }
+:>
+</tasks>
+
+<actions>
+<:
+    for $m (values %module) {
+        print moduleHelpers::chainActions(%$m);
+    }
+:>
+</actions>
+
+<!-- end module.xml for StateMachineBase -->
+
+

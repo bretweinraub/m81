@@ -1,0 +1,67 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Sugar::Utils",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+    my $Utils = $Utils->new();   # stub example .... expand
+],
+				   description => 'Utilities for working with sugarCRM');
+
+$po->setMembers([
+#                 {name => "filename", 
+#		  type => "string", 
+#		  required => 1,
+#		  format => '([\/\w\d]+)\.uxf',
+#		  description => "Name of the document to generate"},
+#                 {name => "elements",
+#                  ref => 'ARRAY',
+#                  description => "Array of UXFElement objects in this document"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+no strict ;
+@ISA = qw(Exporter);
+@EXPORT = qw(SugarKey);
+use strict ;
+
+################################################################################
+
+sub SugarKey {
+   <:= $po->contract('SugarKey' => {description => 'generate a unique sugar key based on some input data',
+				    static => 1,
+				    getopts => [
+						{name => 'data' ,
+						 required => 't',
+						 description => 'data to process',},
+						]}); :>
+    do {
+	    $data =~ s/\&/and/g;
+	    $data =~ s/[\s:\-\(\)\.\/]/_/g;
+	    $data =~ s/\#/no/g;
+	    $data =~ s/%/pct/g;
+	    $data =~ s/\'//g;
+	    $data =~ s/\;//g;
+	    $data =~ s/_+/_/g;
+	    $data =~ s/,/_/g;
+	    $data =~ s/^_//g;
+	    $data =~ s/\[//g;
+	    $data =~ s/\]//g;
+	    $data =~ s/^Number$/Number_/;
+
+	    $data;
+    };
+}
+

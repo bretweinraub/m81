@@ -1,0 +1,750 @@
+<: 
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "DB::OracleHandle",
+				   isa => "DB::DBHandle",
+				   include => ['DBI',
+					       'Metadata::Object::ColumnNameTranslator',
+					       'Utils::PerlTools',],
+				   description => "Wrapper for an Oracle DBIDatabase Handle.");
+
+$po->setMembers([{name => "SID", 
+		  description => "SID for the oracle instance to connect to"},
+		 {name => "port", 
+		  format => '\d+',
+		  description => "port for the oracle instance to connect to"},]); 
+:>
+
+<:= $po->dump(); :>
+
+sub _new {
+    <:= $po->dumpContract(method => "_new"); :>
+
+    Confess "required member variable SID not set" unless $this->getSID();
+    $this->setConnectString("dbi:Oracle:host=" . $this->getHost() . ";sid=" . $this->getSID() . ";port=" . $this->getPort() );
+    $this->connect();
+}
+
+################################################################################
+#
+# for Oracle you can use the same handle
+#
+################################################################################
+
+sub getMDHandle {
+   <:= $po->contract('getMDHandle' => {description => 'spins off a new DB handle for a different database or schema',
+				       }); :>
+    do {
+	$this;
+    };
+}
+
+
+################################################################################
+
+sub cloneUnlessExists {
+   <:= $po->contract('cloneUnlessExists' => {description => 'clone this table unless the destination table already exists.  This method also initializes a DB::Table object and returns it.',
+					     getopts => [{name => 'sourceTable' ,
+							  required => 't',
+							  ref => "DB::Table",
+							  description => 'table to clone',},
+							 {name => 'name' ,
+							  required => 't',
+							  description => 'name of table to create',},
+							 {name => 'suppressM80',
+							  description => 'don\'t add in the m80 magic columns',},
+							 ]}); :>
+    do {
+# TODO: we should really be rectifying schema differences at this point.
+	$this->clone(sourceTable => $sourceTable,
+		     suppressM80 => $suppressM80,
+		     name => $name)
+	    unless $this->tableExists(name => "$name");
+
+	$this->newTable (name => $name);
+    };
+}
+
+################################################################################
+#
+# TODO:
+# 1. We should be generated the following for these tables:
+# 1a.  Primary Key
+# 1b.  Primary Key sequence
+# 1c.  Insert and updated date triggers       
+# 1d.  Inserted and updated data field.
+
+
+################################################################################
+
+sub createTable {
+    <:= $po->contract('createTable' => {description => 'generates a database table, maybe with m80 extensions',
+					getopts => [{name => 'name' ,
+						     required => 't',
+						     description => 'table name to create',},
+						    {name => 'columns' ,
+						     required => 't',
+						     ref => HASH,
+						     description => 'hash of column records for the generated table',},
+						    {name => "columnNameTranslators",
+						     description => 'translation description for column names that need to be converted'},
+						    {name => 'prefixDateColumns' ,
+						     description => 'text to prefix to generated data columns',},
+						    {name => "instantiationTable",
+						     description => "do not generate alternate key .... AKA 'instantiation' of an object"},
+						    {name => "noexec",
+						     description => "print but do not execute",},
+						    {name => "drop",
+						     description => "attempt to drop existing objects"},
+						    {name => 'suppressM80',
+						     description => 'don\'t add in the m80 magic columns',},
+						    ]}); :>
+    do {
+	my $sql = "create table $name (\n";
+
+	$this->debugPrint (1, "creating " . ($suppressM80 ? "non" : "" ) . " m80 table $name");
+
+	# add primary key 
+
+	my $numColumns = 0;
+	
+	unless ($suppressM80) {
+	    $sql .= "\t$name" . "_id number(10) not null";
+	    $numColumns++;
+	}
+
+	my %columns = %{$columns};
+
+	foreach my $columnName (keys(%columns)) {
+	    $this->debugPrint (2, "processing column name $columnName");
+	    my $newColumn = $this->getTypeAsText(data => $columns{$columnName},
+						 full => 't');
+	    $this->debugPrint (2, "found $columnName: $newColumn");
+	    $sql .= ($numColumns++ ? ",\n" : "") . 
+		$this->validColumnName(data => $columnName, 
+				       columnNameTranslators => $columnNameTranslators) . "\t\t\t$newColumn";
+	}
+	
+	unless ($suppressM80) {
+	    $sql .= ",\n";
+	    $sql .= $prefixDateColumns . "INSERTED_DT date not null,\n";
+	    $sql .= $prefixDateColumns . "UPDATED_DT date ,\n";
+	    $sql .= "constraint $name" . "_pk primary key ($name" .  "_id)";
+	}
+
+	$sql .= ")";
+
+	$this->debugPrint (0, "preparing to create table $name");
+	$this->debugPrint (2, " sql statement is $sql");
+
+	return if $noexec;
+
+	$this->dropTable(name => "$name") if $drop;
+
+	$this->execute(sql => $sql);
+
+	unless ($suppressM80) {
+	    $this->PLSQLBlock (sql => "drop sequence $name" . "_s",
+			       ignore => ArrayRef(-2289)) if $drop;
+	    $this->PLSQLBlock (sql => "create sequence $name" . "_S increment by 5 start with 1",
+			       ignore => ArrayRef(-955));
+	    $this->createM80Triggers(name => $name,
+				     prefixDateColumns => $prefixDateColumns);
+	}
+	$this->debugPrint (0, "created table $name");
+
+    };
+}
+
+################################################################################
+
+sub createM80Triggers {
+   <:= $po->contract('createM80Triggers' => {description => 'create standard m80 triggers',
+					     getopts => [
+						 {name => 'name' ,
+						  required => 't',
+						  description => 'table name to create',},
+						 {name => 'prefixDateColumns' ,
+						  description => 'text to prefix to generated data columns',},
+						 ]}); :>
+
+#
+# TODO: There is one fundamental problem here.  For long running transaction, there could be a delay between
+# the inserted  or updated date and the  actual time the row appears to parallel transactions (like data warehouse-esque)
+# row scraping.  
+#
+# One option would be to use an after trigger, but that has its own challenges.  Specifically an after trigger
+# cannot alter the :new or :old values in the trigger:
+#
+# http://blogs.ittoolbox.com/oracle/jochenvdv/archives/after-triggers-the-truth-is-out-there-17415
+#
+# A better alternative would to create an audit table which would be updated based on an after trigger.
+#
+# AUDIT ( sourceTable varchar,
+#         sourceKey varchar,
+#         sourceUser varchar,
+#         inserted_dt date,
+#         updated_dt data )
+#
+
+    do {
+	$this->execute(sql => "
+create or replace trigger " . $name . "_I
+before insert on " . $name . "
+for each row
+declare
+begin
+   if DBMS_REPUTIL.FROM_REMOTE = FALSE THEN
+
+     IF :new." . $name . "_id IS NULL THEN
+         SELECT " . $name . "_S.NEXTVAL INTO :new." . $name . "_id FROM DUAL; 
+     END IF;
+     :new." . $prefixDateColumns . "inserted_dt := SYSDATE;
+   end if;
+end;");
+	$this->execute(sql => "
+create or replace trigger " . $name . "_U
+before update on " . $name . "
+for each row
+declare
+begin
+   if DBMS_REPUTIL.FROM_REMOTE = FALSE THEN
+     :new." . $prefixDateColumns . "updated_dt := SYSDATE;
+   end if;
+end;
+");
+
+    };
+}
+
+################################################################################
+
+sub dropTable {
+    <:= $po->contract('dropTable' => {description => 'drop a table',
+				      getopts => [
+						  {name => 'name' ,
+						   required => 't',
+						   description => 'table to drop',},
+						  ]}); :>
+    do {
+	$this->PLSQLBlock(sql => "drop table $name",
+			  ignore => ArrayRef(-942));	
+    };
+}
+
+################################################################################
+
+sub PLSQLBlock {
+   <:= $po->contract('PLSQLBlock' => {description => 'execute a PLSQL block with ignored exceptions',
+				      getopts => [
+					  {name => 'sql' ,
+					   required => 't',
+					   description => 'sql to execute inside a sql block',},
+					  {name => "ignore",
+					   ref => ARRAY,
+					   description => "ignore these exceptions",},
+					  ]}); :>
+    do {
+	$this->execute(sql => _PLSQLBlock(@_));
+    };
+}
+    
+################################################################################
+
+sub _PLSQLBlock {
+   <:= $po->contract('_PLSQLBlock' => {description => 'returns the code for a PLSQL block',
+				       static => 1,
+				       getopts => [
+					   {name => 'sql' ,
+					    required => 't',
+					    description => 'sql to execute inside a sql block',},
+					   {name => "ignore",
+					    ref => ARRAY,
+					    description => "ignore these exceptions",},
+					   ]}); :>
+    do {
+	my $ret;
+	my @ignore = @{$ignore};
+	if ($ignore) {
+	    $ret .= "DECLARE\n";
+	    for (my $i = 0 ; $i < $#ignore + 1; $i++) {
+		$ret.= "   ignored_exception$i exception;\n";
+		$ret .= "   PRAGMA EXCEPTION_INIT(ignored_exception$i, $ignore[$i]);\n";
+	    }
+	}
+	$ret .= "BEGIN\n";
+	$ret .= "   execute immediate '$sql';\n";
+	$ret .= "EXCEPTION\n";
+	for (my $i = 0 ; $i < $#ignore + 1; $i++) {
+	    $ret .= "   WHEN ignored_exception$i THEN\n";
+	    $ret .= "     NULL;\n";
+	}
+	$ret .= "END;\n";
+
+	$ret;
+    };
+}
+
+################################################################################
+
+# useful: http://www.indiana.edu/~dss/Services/DataWarehouse/Oracle/Sybase/conversion.html
+
+sub getTypeAsText {
+    <:= $po->contract('getTypeAsText' => {description => 'return the type variable as a text field',
+					  getopts => [
+					      {name => 'data' ,
+					       ref => 'DB::FieldMetaData',
+					       required => 't',
+					       description => 'data to process',},
+					      {name => 'full' ,
+					       description => 'return a full SQL create statement worthy string',},
+					      {name => 'fixedLength',
+					       description => 'force column length based on this argument'},
+					      ]}); :>
+    do {
+	my $type = $data->getType();
+	my $length = $fixedLength ? $fixedLength : $data->getPrecision();
+	$this->debugPrint (1, $data->getName() . " type " . $data->getType() . " precision " . $length . " scale " . $data->getScale());
+	my $ret;
+
+	if ($type == 1) {
+	    $ret = "CHAR". ($full ? "(" . $length . ")" : "") ;
+	} elsif ($type eq -4 or $type eq 40 or $type == -1) {
+	    $ret = "CLOB";
+	} elsif ($type == 12) {
+	    $ret = "VARCHAR2". ($full ? "(" . $length . ")" : "") ;
+	} elsif ($type == 8 or $type == 6) { # type 6 is a MSSql/Sybase float
+	    $ret = "FLOAT";
+	} elsif ($type == 11 or $type == 93 or $type == 9 or $type == 91) {
+	    $ret = "DATE";
+	} elsif ($type eq -6 or $type == 3 or $type == 7 or $type == 4 or $type == 5) {
+	    my $dataHandle = $data->getHandle();
+	    if ($dataHandle->can("DBIPrecisionToGenericPrecision")) {
+		eval {
+		    $ret = "NUMBER" . ($full ? "(" . $dataHandle->DBIPrecisionToGenericPrecision(data => $length) . ")" : "");
+		};
+		Confess "$@" if $@;
+
+	    } else { # not sure why we get here .... but on ProvideX data sources we do :(  Maybe because we can't create the object
+		# because there's no DBD::ODBC on this box?  That's my guess.....
+		$ret = "NUMBER" . ($full ? "(" . $length . ")" : "");
+	    }
+	} elsif ($type eq -5) { # mysql BigINT
+	    $ret = "NUMBER(20)";
+	} elsif ($type eq -7) {
+	    $ret = "CHAR(1)";
+	} else {
+	    Confess "field type $type not implemented for column " . $data->getName();
+	}
+	return $ret;
+    };
+}
+
+################################################################################
+
+sub bindParam {
+   <:= $po->contract('bindParam' => {description => 'returns the appropriate bind param syntax for a type',
+				     getopts => [{name => 'data' ,
+						  required => 't',
+						  ref => "DB::FieldMetaData",
+						  description => 'data to process',},
+						 {name => "sourceTable",
+						  ref => 'DB::Table',
+						  description => 'truncate this table if set',},
+						 {name => 'dateFormat',
+						  default => 'YYYY-MM-DD HH24:MI:SS',
+						  description => "can be used to specify the date format used in the input"},
+						 ]}); :>
+    do {
+	$this->debugPrint (2, "examining " . $data->getName() . " : " . $this->getTypeAsText(data => $data));
+
+	if ( $this->getTypeAsText(data => $data) =~ /DATE/i) {
+	    
+	    my $sourceField = $sourceTable ? $sourceTable->getColumns()->{$data->getName()} : undef;
+	    my $_dateFormat = $sourceField 
+		? ($sourceField->getDateFormat() 
+		   ? $sourceField->getDateFormat()
+		   : $dateFormat) 
+		: $dateFormat;
+	    
+	    $this->debugPrint (1, "found DATE " . $data->getName() . " : " . $_dateFormat );
+
+	    return "to_date (? , '" . ($_dateFormat) . "')";
+	}
+	return "?";
+    };
+}
+
+################################################################################
+
+sub selectParam {
+   <:= $po->contract('selectParam' => {description => 'returns the appropriate select param syntax for a type',
+				       getopts => [
+						   {name => 'data' ,
+						    required => 't',
+						    ref => "DB::FieldMetaData",
+						    description => 'data to process',},
+						   {name => 'dateFormat',
+						    default => 'YYYY-MM-DD HH24:MI:SS',
+						    description => "can be used to specify the date format used in the input"},
+						   ]}); :>
+    do {
+	my $name=$data->getName();
+	$this->debugPrint (3, "examining " . $name . " : " . $this->getTypeAsText(data => $data));
+
+	return "to_char (" . $name . " , '$dateFormat') " . $name
+	    if $this->getTypeAsText(data => $data) =~ /DATE/i;
+	return $name;
+    };
+}
+
+################################################################################
+
+sub maxColumnLength {
+   <:= $po->contract('maxColumnLength' => {description => 'returns the maximum column length for this DBHandle',
+					   getopts => []}); :>
+    30;
+}
+
+
+################################################################################
+
+sub getDefaultDateFormat {
+    <:= $po->contract('getDefaultDateFormat' => {description => 'returns the default date format for this RDBMS',
+						 getopts => [
+							     #{name => 'data' ,
+							     # required => 't',
+							     # description => 'data to process',},
+							     ]}); :>
+    do {
+	'YYYY-MM-DD HH24:MI:SS';
+    };
+}
+
+################################################################################
+
+sub scrubBindData {
+   <:= $po->contract('scrubBindData' => {description => 'when binding data to an insert or update statement, this routine is called to pre-scrub the data.  Handles simple migration issues between RDBM(s)',
+					 getopts => [{name => 'data' ,
+						      required => 't',
+						      description => 'data to process',},
+						     {name => 'field' ,
+#						   ref => "DB::FieldMetaData",
+						      description => 'field metadata for the data',},
+						     ]}); :>
+    do {
+	return $data unless $field;
+
+	$this->debugPrint (2, "scrubbing data $data for " . $field->getName() . "; type is " . $field->getType());
+
+	my $type = $field->getType();
+	if ($type == 9 or $type == 11) {
+	    return undef if $data =~ /0000-00-00/;                              # this is a not very pleasant mysql-ism
+	} 
+	return $data;
+    };
+}
+
+################################################################################
+
+sub getDateData {
+   <:= $po->contract('getDateData' => {description => 'localizes date data from a table based on a format string',
+				      getopts => [
+						  {name => 'table' ,
+						   required => 't',
+						   description => 'table to process',},
+						  {name => 'field' ,
+						   required => 't',
+						   description => 'field to process',},
+						  {name => 'function' ,
+						   required => 't',
+						   description => 'function to process',},
+						  {name => 'fmt' ,
+						   required => 't',
+						   description => 'how to format results',},
+						   ]}); :>
+    do {
+	return $this->getData (sql => "select to_char ($function($field), '$fmt') $field from $table");
+    };
+}
+
+################################################################################
+
+sub getPrimaryKeyName {
+   <:= $po->contract('getPrimaryKeyName' => {description => 'returns the name of this tables primary key',
+				      getopts => [
+					  {name => 'tableName' ,
+					   required => 't',
+					   description => 'table name to fetch primary key for',},
+					  ]}); :>
+    do {
+	Confess "not implemented";
+    };
+}
+
+################################################################################
+
+sub validColumnName {
+   <:= $po->contract('validColumnName' => {description => 'returns a column name that is valid for Oracle',
+					   getopts => [{name => "columnNameTranslators",
+							description => 'translation description for column names that need to be converted'},
+						       {name => 'data' ,
+							required => 't',
+							description => 'data to process',},
+						       ]}); :>
+    do {
+	my @cnts = split(/[,\s]+/,$columnNameTranslators);
+	if ($data =~ /^(comment|date)$/i) {
+	    $data = "$1_"; 
+	} 
+	foreach my $cnt (@cnts) {
+	    my $regex = $ENV{$cnt . "_regex"};
+	    my $_pre = $data;
+	    eval '$data =~ ' . "$regex ;";
+	    $this->debugPrint (0, "converted $_pre to $data")
+		if ($_pre != $data);
+	}
+	substr($data,0,$this->maxColumnLength());
+    };
+}
+
+################################################################################
+
+sub validTableName {
+   <:= $po->contract('validTableName' => {description => 'returns a valid table name for this RDBMS',
+					  getopts => [
+						      {name => 'data' ,
+						       required => 't',
+						       description => 'data to process',},
+						      ]}); :>
+    do {
+	substr($data,0,27);
+    };
+}
+
+################################################################################
+
+sub fetchPrimaryKeyName {
+   <:= $po->contract('fetchPrimaryKeyName' => {description => 'attempts to derive the primary key of this table based on DB metadata',
+					       getopts => [
+							   {name => "name",
+							    description => "table name to derive",
+							    required =>  1,},
+							   {name => 'required' ,
+							    description => 'require a result ... throw an error if the primary key can\'t be derived',},
+							   ]}); :>
+    do {
+	my %results = %{$this->getData (sql => "
+select 	ucc.column_name
+from 	user_constraints uc,
+	user_cons_columns ucc
+where 	upper(uc.table_name) = upper('" . $name . "') 
+and 	uc.constraint_type = 'P'
+and	uc.table_name = ucc.table_name
+and	uc.constraint_name =  ucc.constraint_name")};
+
+	Confess "multiple column primary keys not supported" . Dumper(%results)
+	    if $results{rows} > 1;
+
+	Confess "no primary key derived"
+	    if $required and $results{rows} < 1;
+
+	$this->debugPrint(1, "primary key derived as " .  $results{COLUMN_NAME}[0]);
+
+	$results{COLUMN_NAME}[0];
+    };
+}
+
+################################################################################
+
+sub inlineViewModifier {
+   <:= $po->contract('inlineViewModifier' => {description => 'when creating an inline view and naming, it can be required by some RDBMS(like mysql) to use an "as"',
+				      getopts => [
+				                   #{name => 'data' ,
+						   # required => 't',
+						   # description => 'data to process',},
+						   ]}); :>
+    do {
+	"";
+    };
+}
+
+
+################################################################################
+
+sub dateSelector {
+   <:= $po->contract('dateSelector' => {description => 'When selecting a date from this database, produces an  approriate formatting string.',
+					getopts => [
+						    {name => 'data' ,
+						     required => 't',
+						     description => 'data to process',},
+						    ]}); :>
+    do {
+	"to_char ($data, 'YYYY-MM-DD HH24:MI:SS')";
+    };
+}
+
+
+################################################################################
+
+sub dateCreator {
+   <:= $po->contract('dateCreator' => {description => 'Useful for converting string representation of dates into actual Oracle date formats',
+				      getopts => [
+				                   {name => 'data' ,
+						   required => 't',
+						   description => 'data to process',},
+						   ]}); :>
+    do {
+	"to_date ('$data', 'YYYY-MM-DD HH24:MI:SS')";
+    };
+}
+
+
+################################################################################
+
+sub setPrecision {
+   <:= $po->contract('setPrecision' => {description => 'modify the precision of a column',
+					getopts => [{name => 'columnName',
+						     required => 1,
+						     description => 'name of the column to alter',},
+						    {name => 'precision',
+						     required => 1,
+						     description => 'new precision',},
+						    {name => 'name',
+						     required => 1,
+						     description => 'name of the table to alter',},
+						    ]}); :>
+    do {
+	my $sql = "alter table $name modify $columnName varchar2 ($precision)";
+	$this->debugPrint(0, $sql);
+	$this->execute(sql => $sql);
+    };
+}
+
+
+################################################################################
+
+sub getReferers {
+   <:= $po->contract('getReferers' => {description => 'fetches foreign key metadata',
+				       getopts => [{name => 'tableName' ,
+						    required => 't',
+						    description => 'table name to derive references for',},
+						   ]}); :>
+    do {
+	$this->newRowSet(sql => "select	A.table_name referring_table,
+	lower(A.column_name) referring_column, 
+	lower(B.column_name) referred_column
+from    (
+		select	table_name,
+			column_name,
+			constraint_name
+		from	user_cons_columns
+		where	lower(table_name) = lower('$tableName')
+	) B,
+	(
+		select	user_constraints.constraint_name, 
+			user_constraints.r_constraint_name,
+			user_cons_columns.column_name,
+			user_constraints.table_name
+		from	user_constraints, 
+			user_cons_columns
+ 		where 	
+			constraint_type = 'R'
+		and	user_constraints.constraint_name = user_cons_columns.constraint_name
+	) A
+where	A.r_constraint_name = B.constraint_name");
+    };
+}
+
+################################################################################
+
+sub stringToDate {
+   <:= $po->contract('stringToDate' => {description => 'convert a date string into SQL ready date format',
+				      getopts => [
+						  {name => 'data' ,
+						   required => 't',
+						   description => 'data to process',},
+						  ]}); :>
+    do {
+	$data =~ /0000/ && do {
+	    $data  = "01-01-1900 00:00:00";
+	};
+	return "to_date(\'" . $data . "\', 'MM-DD-YYYY HH24:MI:SS')"
+    };
+}
+
+
+
+################################################################################
+
+sub getReferrals {
+   <:= $po->contract('getReferrals' => {description => 'fetches foreign key metadata -> tables referenced from the argument',
+					getopts => [{name => 'tableName' ,
+						     required => 't',
+						     description => 'table name to derive references from',},
+						   ]}); :>
+    do {
+	$this->newRowSet(sql => "select	A.table_name referring_table,
+	lower(A.column_name) referring_column, 
+	lower(B.table_name) referred_table,
+	lower(B.column_name) referred_column
+from    (
+		select	table_name,
+			column_name,
+			constraint_name
+		from	user_cons_columns
+	) B,
+	(
+		select	user_constraints.constraint_name, 
+			user_constraints.r_constraint_name,
+			user_cons_columns.column_name,
+			user_constraints.table_name
+		from	user_constraints, 
+			user_cons_columns
+ 		where 	
+			(
+ 				lower(user_constraints.table_name) = lower('$tableName')
+ 			)
+		and	
+			constraint_type = 'R'
+		and	user_constraints.constraint_name = user_cons_columns.constraint_name
+	) A
+where	A.r_constraint_name = B.constraint_name");
+    };
+}
+
+
+__DATA__
+
+select	A.table_name,
+	lower(A.column_name), 
+	lower(B.table_name), 
+	lower(B.column_name)
+from    (
+		select	table_name,
+			column_name,
+			constraint_name
+		from	user_cons_columns
+		where	table_name = 'EMPLOYEE'
+	) B,
+	(
+		select	user_constraints.constraint_name, 
+			user_constraints.r_constraint_name,
+			user_cons_columns.column_name,
+			user_constraints.table_name
+		from	user_constraints, 
+			user_cons_columns
+ 		where 	
+--			(
+-- 				user_constraints.table_name = 'WORKLIST_EMPLOYEE' 
+-- 			)
+--		and	
+			constraint_type = 'R'
+		and	user_constraints.constraint_name = user_cons_columns.constraint_name
+	) A
+where	A.r_constraint_name = B.constraint_name
+/
+
+
+

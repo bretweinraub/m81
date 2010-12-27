@@ -1,0 +1,4 @@
+
+ChainDB		:	Database module for the state machine.
+testMachine	:	state machine for simple testing.
+

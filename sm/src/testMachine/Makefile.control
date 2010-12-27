@@ -1,0 +1,13 @@
+fetchXML	::;
+		STAGE_DIR=$(LocalStageDirBase)/$(task_id) ; \
+		$(AutomationControllerDir)/utils/createContext.pl -tag LocalStageDir -value $${STAGE_DIR} ; \
+		mkdir -p $${STAGE_DIR} ; \
+		scp $(user)@$(host):$(directory)/$(xmlfile) $${STAGE_DIR}
+
+createTarBall	::;
+		tar zcvf $(LocalStageDir)/etl.tar.gz $(PERF_P4_MAP)/StateMachine
+
+
+pwd		::;	pwd
+		
+	

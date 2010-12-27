@@ -1,0 +1,125 @@
+<: #-*- perl -*- # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'dumpContext.pl' , 
+                                   description => 'Small tool to output the actual context of a task (after all parent/child inheritence and mapper applications).
+
+=head1 SAMPLE OUTPUT
+
+
+=head1 EXAMPLES
+
+dumpContext.pl -task_id 851
+
+Sometimes when developing it can be very useful to load the context into your current shell:
+
+eval $(dumpContext.pl -task 881)
+
+=head1 PREREQUISITES
+
+If you use m80 to set your environment for connection to the ChainDB database, then m80 --execute is probably
+required.
+
+',
+                                   include => [ChainDB,
+					       task,
+					       debug,
+					       ContextExporter,],
+                                   getopts => [
+ 					       { tag => 'task_id:i',
+						 description => 'Starting in v3.0 -task_id is deprecated.  Use -action-id instead.  -task_id is not export filtered and never will be.  If you think something isn\'t working correctly with this option, that\'s probably because its not.  Use -action_id.',},
+ 					       { tag => 'action_id:i',
+						 description => 'Starting in v3.0 this is the preferred method.  Specifying the action-id will get you the correct context for an action.  It includes the m80 environment and is correctly mapped and filtered.  USE IT.',},
+ 					       { tag => 'mapper:s',
+						 description => 'mapper to apply to dumped context.  This option is not supported when specifying the action id',},
+ 					       { tag => 'filter:s',
+						 description => 'filter the dumped context',},
+ 					       { tag => 'nocontext',
+						 description => 'specifies that mappers will be applied, but no context will be applied.  Useful for applying a context map to things other context data, like maybe the output of loadCollections.  Only implemented for -action_id',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+Confess "set only one of -task_id and -action_id"
+    if $task_id and $action_id;
+
+Confess "nocontext not implemented for -task_id"
+    if ($nocontext and not $action_id);
+
+use lib dirname($0);
+
+$debug = debug::new ('level' => ($debugLevel) ? $debugLevel : 0,
+		     prefix => '# ');
+
+my $ChainDB = ChainDB::new (verbose => $verbose);
+
+if ($task_id) {                                                                 # ye olde dumpc() from before context filters.
+    my %context = %{$ChainDB->loadTaskContext($task_id)};
+    
+    my $parent_task_id = $ChainDB->fetchParentTaskId($task_id);
+    
+    my $mapper = $mapper ? $mapper : task::_getMapper (task_id => $task_id, ChainDB => $ChainDB);
+    
+    my $splitText=";";		# assigning to a variable will hopefully fix emacs colorization
+    
+    if ($mapper) {
+	for $lmapper (split /$splitText/, $mapper) { 
+	    print "# mapper is $lmapper\n";
+	    map {
+		my $data = $_;
+		my $matchref;
+		{
+		    $mapped = task::applyMapper (mapper => $lmapper, data => $data, matchref => \$matchref);
+		    print "export $mapped=\'$context{$data}\'\n" unless ($filter and not $matchref);
+		    print "export $data=\'$context{$data}\' # also exporting unmapped version\n" if ($mapped ne $data) ;
+		    }
+	    } (keys(%context));
+	}
+    } else {
+	map {
+	    my $data = $_;
+	    print "export $data=\'$context{$data}\'\n";
+
+	} (keys(%context));
+    }
+
+    print "export parent_task_id=\'$parent_task_id\'\n" if $parent_task_id;
+} elsif ($action_id) { #########################################################################################################################################
+    $ChainDB->loadSQL ("select task_id, export_filter from action where action_id = $action_id", \my %action, $verbose);
+
+    my $task_id = $action{TASK_ID}[0];
+    my $export_filter = $action{EXPORT_FILTER}[0];
+    my $parent_task_id = $ChainDB->fetchParentTaskId($task_id);
+
+    Confess "No task_id could be derived from the action_id $action_id.  Are you sure that is a valid action_id?"
+	unless defined $task_id;
+
+    my %unifiedContext = ($nocontext ? %ENV
+			  : (%ENV, %{$ChainDB->loadTaskContext($task_id)}));
+
+    my $mapper = task::_getMapper (task_id => $task_id, ChainDB => $ChainDB);
+
+    print "# task mapper derived as $mapper\n";
+
+    my @exportData = split(/\|/,$export_filter);                                # convert back the format exportContext() expects ... sort of a hack
+
+    ContextExporter::exportContext ( mapper => $mapper, 
+				     debug => $debug,
+				     unifiedContext => \%unifiedContext,
+				     task_id => $task_id,
+				     exportData => \@exportData);
+
+    my $env_size = 0;
+    foreach $key (keys(%ENV)) {
+	print "export $key=\'$ENV{$key}\'\n";                                   # dump the mapped filter environment to STDOUT
+	$env_size += length($key) + length($ENV{$key});
+    }
+    print "export parent_task_id=\'$parent_task_id\'\n" if $parent_task_id;
+
+    print "# subshell environment size is: $env_size \n";
+} else { ######################################################################################################################################################
+    Confess "please use -task_id or -action_id";
+}
+
+cleanup 0; 

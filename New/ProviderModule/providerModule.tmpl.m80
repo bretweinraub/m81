@@ -1,0 +1,160 @@
+{! # -*- perl -*-
+# $m80path = [{command => m4conv },{command => "embedperl -magicStart '{' -magicEnd '}' -embedderChar '!'"}]
+use Env;
+# M80_VARIABLE MODULE_NAME
+# M80_VARIABLE WHAT_FUNCTIONS_DOES_THIS_IMPLEMENT
+
+my @fn = split /[\s,]+/, 'WHAT_FUNCTIONS_DOES_THIS_IMPLEMENT';
+
+
+sub chainBlock {
+    my ($namespace) = @_;
+    return "
+\$module{$namespace} = {a => [{n => $namespace,
+                          c => 'exit 0',
+                          t => __SUCCESS__}]};
+
+";
+
+}
+
+sub chainBlocks { 
+    my $ret = '';
+    for $c (@fn) { 
+        $ret .= chainBlock($c);
+    }
+    return $ret;
+}
+
+sub taskBlock {
+    my ($namespace) = @_;
+    return "<:= moduleHelpers::childTasks(\%$namespace); :>\n";
+}
+
+sub taskBlocks { 
+    return "<:
+    for \$m (values \%module) {
+        print moduleHelpers::childTasks(\%\$m);
+    }
+:>";
+
+#     my $ret = '';
+#     for $c (@fn) { 
+#         $ret .= taskBlock($c);
+#     }
+#     return $ret;
+}
+
+sub actionBlock {
+    my ($namespace) = @_;
+    return "<:= moduleHelpers::chainActions(\%$namespace); :>\n";
+}
+
+sub actionBlocks { 
+    return "<:
+    for \$m (values \%module) {
+        print moduleHelpers::chainActions(\%\$m);
+    }
+:>";
+
+#     my $ret = '';
+#     for $c (@fn) { 
+#         $ret .= actionBlock($c);
+#     }
+#     return $ret;
+}
+
+
+!}<!-- FILE|t/simple.t|0644 -->
+exit 0
+
+<!-- FILE|module.xml.m80|0644|DO_NOT_OVERWRITE -->
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+$moduleHelpers::SCOPED_MODULE = 'MODULE_NAME';
+
+:>
+
+<!-- begin module.xml for MODULE_NAME   -->
+
+<:
+
+{!= chainBlocks() !}
+
+:>
+
+<tasks>
+{!= taskBlocks() !}
+</tasks>
+
+<actions>
+{!= actionBlocks() !}
+</actions>
+
+<!-- end module.xml for MODULE_NAME -->
+
+
+<!-- FILE|Makefile|0644 -->
+# -*-makefile-*-
+# $m80path = [{ command => 'embedperl' }]
+
+
+
+#
+# The m4 command that is run by m80path is derived from m80standalone.mk and local.mk
+# (in the `m80 --libpath`/make directory). That file allows 1 m4 variable to be 
+# derived from the ENV, the $M4DEBUG variable. The following line makes sure that
+# out localDSL and DSL file get added to the overall m4 command.
+#
+
+M80LIB=$(shell m80 --libpath)
+
+localHeadRules=$(wildcard localHead.mk)
+ifneq ($(localHeadRules),)
+include localHead.mk
+endif
+
+include $(M80LIB)/make/m80generic.mk
+
+%.sh : %.sh.m80
+	env M4DEBUG="$(M4DEBUG)" runPath ${DEBUG} -file $< -dest $@
+
+shm80files = $(patsubst %.sh.m80,%.sh,$(wildcard *.sh.m80))
+
+
+%.sql : %.sql.m80
+	env M4DEBUG="$(M4DEBUG)" runPath ${DEBUG} -file $< -dest $@
+
+sqlm80files = $(patsubst %.sql.m80,%.sql,$(wildcard *.sql.m80))
+
+
+%.xml : %.xml.m80
+	env M4DEBUG="$(M4DEBUG)" runPath ${DEBUG} -file $< -dest $@
+
+xmlm80files = $(patsubst %.xml.m80,%.xml,$(wildcard *.xml.m80))
+
+
+%.pl : %.pl.m80
+	env M4DEBUG="$(M4DEBUG)" runPath ${DEBUG} -file $< -dest $@
+
+plm80files = $(patsubst %.pl.m80,%.pl,$(wildcard *.pl.m80))
+
+
+
+
+all build deploy :: module.xml $(xmlm80files) $(plm80files)  $(shm80files) $(sqlm80files)
+
+#
+# The following loads local make rules.  Use this local file
+# for rules, as editing this file could cause your rules to be overwritten.
+#
+
+localTailRules=$(wildcard localTail.mk)
+ifneq ($(localTailRules),)
+include localTail.mk
+endif
+
+<!-- FILE|localTail.mk|0644 -->
+include $(M81_HOME)/sm/modules/helpersDependency.mk

@@ -1,0 +1,71 @@
+<: 
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "UMLet::UXFDocument",
+				   description => "A UXF Document");
+
+$po->setMembers([{name => "filename", 
+		  type => "string", 
+		  required => 1,
+		  format => '([\/\w\d]+)\.uxf',
+		  description => "Name of the document to generate"},
+                 {name => "elements",
+                  ref => 'ARRAY',
+                  description => "Array of UXFElement objects in this document"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+
+    $this->setElements([]);
+}
+
+sub dump {
+    <:= $po->contract('dump' => {
+	description => "Dumps out a UXF document"} ); :>
+
+    Confess "no value for filename" 
+        unless $this->getFilename();
+
+    open OUTPUT, "> " . $this->getFilename()
+	or Confess "could not open " . $this->getFilename();
+
+    print OUTPUT '<?xml version="1.0" encoding="UTF-8"?><umlet_diagram>';
+
+    foreach my $element (@{$this->getElements()}) {
+	print OUTPUT $element->dump();
+    }
+
+    print OUTPUT "</umlet_diagram>\n";
+
+    close OUTPUT;
+
+    print STDERR "Left UXF document in " . $this->getFilename() . "\n";
+}
+
+sub _push {
+    <:= $po->contract('_push' => {
+	description => "pushs a UXFElement onto the array of these elements",
+    getopts => [{
+	name => "element",
+	ref => 'UMLet::UXFElement',
+	required => 1,
+	description => "element to be added"}]});:>
+
+	    my $dummy = 1;
+
+
+    print Dumper($element);
+    
+    push (@{$this->getElements()},$element);
+
+    print Dumper($this->getElements());
+
+}
+
+	    
+

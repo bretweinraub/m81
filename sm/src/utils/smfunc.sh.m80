@@ -1,0 +1,190 @@
+<: # -*-sh-*-
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+:>#!/bin/sh
+
+<:
+=pod
+
+=head1 NAME
+
+smfunc.sh is a collection of scripts that shorthand for working with state machines.
+To get this code into your environment try the following:
+
+  eval $(mexec \$CONTROLLER_SRC_DIR/utils/smfunc.sh)
+
+=head1 FUNCTIONS
+
+=head2 te
+
+pipe the taskData for a particular taskid into a less. This will do all logs associated
+with that task id. Syntax:
+
+  te <task_id>
+
+=cut
+:>
+
+echo 'function te () { cat /var/www/html/${M80_BDF}/taskData/$1/[0-9]* | less ; } ; '
+
+<:
+=pod
+
+=head2 desc
+
+create and append a description.txt file in a particular taskid labeled taskData directory.
+All information passed in on the command line is written to the file. Syntax:
+
+  desc <task_id> Some description about the particular task id.
+
+=cut
+:>
+
+echo 'function desc () { t=$1 ; shift ; echo "$*" >> /var/www/html/${M80_BDF}/taskData/$t/description.txt ; } ; '
+
+<:
+=pod
+
+=head2 kickAutomator
+
+Look in the crontab and exec the 'startSM' command that exists there.
+Supports multiple running automators through the $BRANCH env variable. This string
+is used to grep the crontab list down to 1 entry. If the $BRANCH env variable is not
+specified, the function silently does nothing. Syntax:
+
+  BRANCH=12345 kickAutomator
+
+=cut
+:>
+
+echo 'function kickAutomator () { test -n "$BRANCH" && ( eval $(bash -c "`crontab -l | grep startSM | grep $BRANCH/ | cut -d\" \" -f6-` ") &) ; } ; '
+
+<:
+=pod
+
+=head2 killAutomator
+
+Find all automators running under a particular user on the local box and shut them down. Syntax:
+
+  killAutomator
+
+=cut
+:>
+
+echo "function killAutomator { if test -n \"$1\"; then x=\$1; else x=\$USER; fi ; kill \$(eval ps -elf --cols 1024 | grep \$x | grep automator | grep -v grep | perl -ane 'print \"\$F[3]\n\"') ; } ;"
+
+<:
+=pod
+
+=head2 whichAutomator
+
+List all automators running under a particular user on the local box. Syntax:
+
+  whichAutomator
+
+=cut
+:>
+
+echo 'function whichAutomator { ps -elf --cols 1024 --forest | grep $M80_BDF | grep startSM | grep -v grep ; } ;'
+
+echo 'function allAutomators { ps -elf --cols 1024 --forest | grep $USER | egrep \(startSM\|automator\) | grep -v grep ; } ;'
+
+
+<:
+=pod
+
+=head2 rt
+
+interface to runTask
+
+  MD_LIBRARY=123 rt <taskName>
+
+=cut
+:>
+
+echo 'function rt { m80 --execute runTask $* ; } ;'
+
+<:
+=pod
+
+=head2 dp
+
+interface to mos deploy - allows for a list of mods to be deployed
+
+  dp AS_BOOTSTRAP LRI
+
+=cut
+:>
+
+echo 'function dp { for x in $*; do mos deploy -m $x; done ; } ;'
+
+<:
+=pod
+
+=head2 build
+
+interface to mos build - allows for a list of mods to be built
+
+  build METADATA XXXX
+
+=cut
+:>
+
+echo 'function build { for x in $*; do mos build -m $x; done ; } ;'
+
+<:
+=pod
+
+=head2 restart
+
+interface to restartTask.pl
+
+  restart <task-id>
+
+=cut
+:>
+
+echo 'function restart { m80 --execute restartTask.pl -task $* ; } ;'
+
+<:
+=pod
+
+=head2 dc
+
+interface to debugChassis.sh
+
+  dc <task-id> <command>
+
+=cut
+:>
+
+echo 'function dc { task_id=$1; shift; m80 --execute dumpContext.pl -task_id $task_id > /tmp/dc.$task_id && (source /tmp/dc.$task_id && m80 --execute $*) && rm -f /tmp/dc.$task_id ; } ;'
+
+<:
+=pod
+
+=head2 newInterfaceModule
+
+wrapper around the $main/templates/interfaceModule.tmpl.m80 template
+
+  newInterfaceModule <name>
+
+=cut
+:>
+
+echo 'function newInterfaceModule { m80 --execute expandTemplate.sh -m $1 -t $TOP/templates/interfaceModule.tmpl.m80 ; } ;'
+
+<:
+=pod
+
+=head2 newProviderModule
+
+wrapper around the $main/templates/providerModule.tmpl.m80 template
+
+  newProviderModule <name>
+
+=cut
+:>
+
+echo 'function newProviderModule { m80 --execute expandTemplate.sh -m $1 -t $TOP/templates/providerModule.tmpl.m80 ; } ;'
+
+

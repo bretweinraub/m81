@@ -1,0 +1,21 @@
+-- $m80path = [{command => "embedperl"   }] -- -*-sql-*-
+
+<: 
+    use lib ".";
+    use Env; 
+    use context;
+:>
+
+<:
+    @contextLoaded = (Description, _adminserver_jvm_params, _lrtest_urlOverride, collections, ALL_J2EEAPPS, _adminserver_host, ALL_HOSTS, runSetName,SyncTo,matchedInstaller_p4change, propertyGroups);
+:>
+	
+create	or replace VIEW CURRENTLY_RUNNING_V AS
+select	task.task_id,
+	task.taskname,
+	task.status,
+	task.updated_dt,
+where<:= genContextWhereClause(task,@contextLoaded) :>
+and	task.status in ('running', 'waiting', 'queued')
+and	parent_task_id is null
+order	by task.task_id asc

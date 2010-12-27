@@ -1,0 +1,53 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'readCSV.pl' , 
+                                   description => 'utility for reading CSV files',
+                                   include => ['Data::Dumper',
+					       'Tie::Handle::CSV'],
+                                   getopts => [
+ 					       { 
+						   tag => 'field:s',
+						   variable => '$field',
+						   required => 't',
+						   description => 'field to analyze',},
+ 					       { 
+						   tag => 'table:s',
+						   variable => '$table',
+						   required => 't',
+						   description => 'table to analyze',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+use DB::OracleHandle;
+
+use strict;
+use warnings;
+
+
+$table =~ s/\.csv//g;
+
+my $csv_fh = Tie::Handle::CSV->new("$table.csv", header => 1);
+
+while (my $csv_line = <$csv_fh>)
+{
+    print $csv_line->{$field};
+    print "\n";
+}
+
+close $csv_fh;
+
+ 
+# my $dbhandle = DB::OracleHandle->new(user => "$ENV{CONTROLLER_USER}",
+# 				     password => "$ENV{CONTROLLER_PASSWD}",
+# 				     SID => "$ENV{CONTROLLER_SID}",
+# 				     host => "$ENV{CONTROLLER_HOST}",
+# 				     port => "$ENV{CONTROLLER_PORT}");
+
+cleanup 0; 

@@ -1,0 +1,63 @@
+<: #-*- perl -*-
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'MakeWatcher.pl' , 
+                                   description => 'description for MakeWatcher',
+                                   include => [],
+                                   getopts => [{ tag => 'directory:s',
+						 variable => '@dirs',
+						 required => 't',
+						 description => 'list of directorys to watch',},
+ 					       { tag => 'sleepVal:i',
+						 required => 't',
+						 default => '1',
+						 description => 'length of sleep',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+
+:>
+
+    use strict;
+my %times = ();
+my %failed = ();
+
+sub Make {
+    my $dir = shift;
+    
+    debugPrint(1, "rebuilding $dir");
+    if (docmdi ("make -C $dir >& /dev/null")) {
+	Warn "make of $dir failed";
+	$failed{$dir} = 1;
+    } else {
+	debugPrint(0, "make failure of $dir was cleared")
+	    if ($failed{$dir});
+	$failed{$dir} = undef;
+    }
+    docmd ("touch $dir/.makewatcher");
+}
+
+foreach my $dir (@dirs) {
+    Confess "not a valid directory $dir"
+	unless -d $dir;
+    Make ($dir);
+}
+
+while (1) {
+    foreach my $dir (@dirs) {
+	debugPrint(2, "checking $dir");
+	my $data = `find $dir -newer $dir/.makewatcher -type f`;
+	if ($data) {
+	    debugPrint(2, "$data is newer for $dir");
+	    Make($dir) if $data;
+	    unless (keys(%failed)) {
+		debugPrint(0, "all clear");
+	    }
+	}
+    }
+    debugPrint(2, "sleeping for $sleepVal secs");
+    sleep ($sleepVal);
+}
+
+cleanup 0; # "

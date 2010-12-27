@@ -1,0 +1,433 @@
+<: 
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "DB::DBHandle",
+				   example => '
+        my $dbhandle = DB::DBHandle->new(); 
+	my %results = %{$dbhandle->getData(sql => "
+                                                   select	*
+                                                   from	(
+                                                   		select 	datecreated, 
+                                                   			max(timecreated) timecreated 
+                                                   		from 	$localTableName 
+                                                   		where 	datecreated = (select max(DATECREATED) from $localTableName) 
+                                                   		group by datecreated
+                                                   	),
+                                                   	(
+                                                   		select 	dateupdated, 
+                                                   			max(timeupdated) timeupdated 
+                                                   		from 	$localTableName 
+                                                   		where 	dateupdated = (select max(DATEUPDATED) from $localTableName) 
+                                                   		group by dateupdated
+                                                   	)")};
+',
+				   include => [DBI,
+					       DB::RowSet,
+					       DB::Table,
+					       DB::FieldMetaData],
+				   description => "Base Class For DBIDatabase Handle Wrapper.");
+
+$po->setMembers([{name => "user", type => "string", 
+		  description => "username for the db instance to connect to"},
+		 {name => "password",		  
+		  description => "password for the db instance to connect to"},
+                 {name => "namespace", 
+		  description => "as an alternative to setting all of the individual connect parameters, a tag like \"CONTROLLER\" could be use to access a namespace"},
+                 {name => "SID", 
+		  description => "can be a SID, databasename, or ODBC descriptor"},
+		 {name => "host", 
+		  description => "host for the db instance to connect to"},
+		 {name => "dbh", ref => "DBI::db",
+		  description => "DBI handle for this Db Connection"},
+		 {name => "connectString", 
+		  description => "DBI connect string for call to DBI->connect()"},]); 
+
+$po->setMethods("connect" => {description => "initializes database connection",
+# 			     getopts => [{ name => "markup", 
+# 					   required => 1,
+# 					   description => "rendering format",
+# 					   format => "(html|wiki)"},],
+},);
+
+
+:>
+
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+
+    if ($this->getNamespace()) {
+	$this->setUser($ENV{$this->getNamespace() . "_USER"});
+	$this->setPassword($ENV{$this->getNamespace() . "_PASSWD"});
+	$this->setSID($ENV{$this->getNamespace() . "_SID"});
+	$this->setHost($ENV{$this->getNamespace() . "_HOST"});
+	$this->setPort($ENV{$this->getNamespace() . "_PORT"});
+    } else {
+	$this->_require('user', 'password', 'host', 'port');
+    }
+
+    $this->setPort(1521) unless $this->getPort();
+}
+
+sub connect {
+<:= $po->dumpContract(method => "connect"); :>
+
+    do {
+	my $dbh;
+
+
+	Confess "failed to connect to DBI"
+	    unless ($dbh = DBI->connect($this->getConnectString(),, $this->getUser() , $this->getPassword(),
+					{ RaiseError => 1 }));
+
+	$this->setDbh($dbh);
+    };
+}
+
+sub execute {
+    <:= $po->contract("execute" => {description => "execute a sql query ",
+				    getopts => [{name => "sql", 
+						 description => "sql string for this statement" },
+						{name => "verbose",
+						 description => "echo the sql string to STDERR"},],}); :>
+   do {
+       $this->debugPrint (1, "$sql");
+#       print STDERR $sql . "\n" if $verbose;
+       eval {$this->getDbh()->prepare($sql)->execute();};
+       Confess "$@" if $@;
+   }
+}
+
+
+################################################################################
+
+sub getData {
+   <:= $po->contract('getData' => {description => 'returns the results of a row set object based on a sql string',
+				      getopts => [
+						  {name => 'sql' ,
+						   required => 'sql string',
+						   description => 'returns a data object (row set results) based on a SQL string',},
+						  {name => 'verbose' ,
+						   description => 'verbosity',},
+						  {name => 'lc',
+						   description => 'force all field names to lower case',},
+						   ]}); :>
+    do {
+	return (DB::RowSet->new(dbh => $this->getDbh(),sql => $sql, verbose=> $verbose, lc => $lc)->getResults());
+    };
+}
+
+
+
+################################################################################
+
+sub getDBType {
+   <:= $po->contract('getDBType' => {description => 'fetch the database type of this handle',
+				      getopts => [
+						   ]}); :>
+    do {
+	my $dbType = ref($this);
+	$dbType =~ s/DB::(.+?)Handle/$1/g;
+	$this->debugPrint(2,"derived database type as $dbType");
+	return $dbType;
+    };
+}
+
+
+################################################################################
+
+sub newRowSet {
+   <:= $po->contract('newRowSet' => {description => 'returns a rowset based on the SQL argument',
+				      getopts => [{name => "sql", 
+						   description => "sql string for this statement" },
+						  {name => "verbose",
+						   description => "echo the sql string to STDERR"},
+						   ]}); :>
+    do {
+	return DB::RowSet->new(dbh => $this->getDbh(),
+			       sql => $sql,
+			       verbose => $verbose);
+    };
+}
+
+
+################################################################################
+
+sub tableMetaData {
+   <:= $po->contract('tableMetaData' => {description => 'fetch the meta data for a table',
+				      getopts => [
+						  {name => 'table' ,
+						   required => 't',
+						   description => 'data to process',},
+						  {name => 'column' ,
+						   required => 't',
+						   description => 'column name to evaluate',},
+						   ]}); :>
+    do {
+	my $dbh = $this->getDbh();
+
+	my $stmt;
+	eval {
+	    $stmt = $dbh->prepare("select * from $table where 1 = 0");
+	    $stmt->execute();
+	};
+	Confess "$@" if $@;
+	for (my $i = 0 ; $i < $stmt->{NUM_OF_FIELDS} ; $i++) {
+	    if (lc($stmt->{NAME}->[$i]) eq lc($column)) {
+		$this->debugPrint(2, "found field $column");
+		my $column = $stmt->{NAME}->[$i];
+		my $ret = DB::FieldMetaData->new (name => $column,
+						  type => $stmt->{TYPE}->[$i],
+						  precision => $stmt->{PRECISION}->[$i],
+						  scale => $stmt->{SCALE}->[$i]);
+#		$this->debugPrint(2, "new object is " . Dumper($ret));
+		return $ret;
+	    }
+	}
+    };
+}
+
+
+################################################################################
+
+sub newTable {
+    <:= $po->contract('newTable' => {description => 'creates a new table record on this handle',
+				     getopts => [{name => 'name' ,
+						  required => 't',
+						  description => 'table name - must already exists.',},
+						 {name => "primaryKeyName",
+						  description => "name of this tables primary key name.  If not defined the name will be attempted to be derived from the DBHandle"},
+						 {name => "requirePrimaryKey",
+						  description => "require a derived primary key"},
+					 ]}); :>
+    do {
+	my $_primaryKeyName;
+
+	unless ($primaryKeyName) {
+	    eval {
+		$_primaryKeyName = $this->fetchPrimaryKeyName(name => $name,
+							      required => $requirePrimaryKey);
+	    };
+	    Confess "$@" if $@;
+	} else {
+	    $_primaryKeyName = $primaryKeyName;
+	}
+	
+	DB::Table->new(handle => $this,
+		       name => $name,
+		       primaryKeyName => $_primaryKeyName);
+    };
+}
+
+################################################################################
+
+sub tableExists {
+   <:= $po->contract('tableExists' => {description => 'returns true if a table exists in this handle',
+				      getopts => [
+						  {name => 'name' ,
+						   required => 't',
+						   description => 'name to query for',},
+						   ]}); :>
+    do {
+	my $dbh = $this->getDbh();
+
+	Confess "invalid character $1 in table name $name"
+	    if $name =~ /(-|\/)/;
+
+	$this->debugPrint (0, "the next statement may throw an error (which is to be expected)");
+	my $stmt;
+	eval {
+	    $stmt = $dbh->prepare("select * from $name where 1 = 0");
+	};
+	$this->debugPrint(1, "$@") if $@;
+	$stmt;
+    };
+}
+
+
+################################################################################
+
+sub validColumnName {
+   <:= $po->contract('validColumnName' => {description => 'returns a column name that is truncated to fit this DBMS',
+					   getopts => [
+						       {name => 'data' ,
+							required => 't',
+							description => 'data to process',},
+						       ]}); :>
+    do {
+	$this->debugPrint (3, "validColumnName($data), length " . length($data));
+
+	substr($data,0,$this->maxColumnLength());
+    };
+}
+
+
+################################################################################
+
+sub DBIPrecisionToGenericPrecision {
+   <:= $po->contract('DBIPrecisionToGenericPrecision' => {description => 'SQL Server "Length" doesn\'t conform to the standard used by Oracle or Mysql.  This is the actual storage size.  So we need to convert this to the bounding used by oracle (which is the number of digits to store).  Fun!  DBHandle contains a default method that just returns the passed in length',
+							  getopts => [
+								      {name => 'data' ,
+								       required => 't',
+								       description => 'data to process',},
+								      ]}); :>
+    do {
+	$data;
+    };
+}
+
+
+
+################################################################################
+
+sub setAutoCommit {
+   <:= $po->contract('setAutoCommit' => {description => 'set the autocommit value for the underlying DBI handle',
+					 getopts => [{name => 'value' ,
+						      required => 't',
+						      description => 'value to assign',}, ]}); :>
+    do {
+	$this->getDbh()->{AutoCommit} = $value;
+    };
+}
+
+
+
+sub clone {
+   <:= $po->contract('clone' => {description => 'clone a table based on a metadata description',
+				 getopts => [{name => 'sourceTable' ,
+					      required => 't',
+					      ref => "DB::Table",
+					      description => 'table to clone',},
+					     {name => "columnNameTranslators",
+					      description => 'translation description for column names that need to be converted'},
+					     {name => 'name' ,
+					      required => 't',
+					      description => 'table to create',},
+					     {name => 'prefixDateColumns',
+					      default => 'local_',
+					      description => 'prefix for data columns ',},
+					     {name => 'suppressM80',
+					      description => 'don\'t add in the m80 magic columns',},
+					     ]}); :>
+    do {
+	my $validName = $this->validTableName(data => $name);
+	$this->createTable(name => $validName,
+			   columns => $sourceTable->getColumns(),
+			   columnNameTranslators => $columnNameTranslators,
+			   prefixDateColumns => $prefixDateColumns,
+			   suppressM80 => $suppressM80,
+			   instantiationTable => 1);
+	$validName;	
+    };
+}
+
+################################################################################
+
+sub validTableName {
+   <:= $po->contract('validTableName' => {description => 'returns a valid table name for this RDBMS',
+					  getopts => [
+						      {name => 'data' ,
+						       required => 't',
+						       description => 'data to process',},
+						      ]}); :>
+    do {
+	$data;
+    };
+}
+
+################################################################################
+
+################################################################################
+
+sub bindParam {
+   <:= $po->contract('bindParam' => {description => 'returns the appropriate bind param syntax for a type',
+				     getopts => [{name => 'data' ,
+						  required => 't',
+						  ref => "DB::FieldMetaData",
+						  description => 'data to process',},
+						 {name => "sourceTable",
+						  ref => 'DB::Table',
+						  description => 'truncate this table if set',},
+						 {name => 'dateFormat',
+						  default => 'YYYY-MM-DD HH24:MI:SS',
+						  description => "can be used to specify the date format used in the input"},
+						 ]}); :>
+    do {
+	"?";
+    };
+}
+
+################################################################################
+
+sub truncateTable {
+   <:= $po->contract('truncateTable' => {description => 'truncate a table in a DB specific way (oracle)',
+					 getopts => [{name => 'name' ,
+						      required => 't',
+						      description => 'table name to truncate',},]}); :>
+    do {
+	$this->execute (sql => "truncate table $name");
+    };
+}
+
+################################################################################
+
+sub scrubBindData {
+   <:= $po->contract('scrubBindData' => {description => 'when binding data to an insert or update statement, this routine is called to pre-scrub the data.  Handles simple migration issues between RDBM(s)',
+					 getopts => [{name => 'data' ,
+						      required => 't',
+						      description => 'data to process',},
+						     {name => 'field' ,
+#						   ref => "DB::FieldMetaData",
+						      description => 'field metadata for the data',},
+						     ]}); :>
+    do {
+	$data;
+    };
+}
+
+################################################################################
+
+sub selectParam {
+   <:= $po->contract('selectParam' => {description => 'returns the appropriate select param syntax for a type',
+				       getopts => [
+						   {name => 'data' ,
+						    required => 't',
+						    ref => "DB::FieldMetaData",
+						    description => 'data to process',},
+						   {name => 'dateFormat',
+						    default => 'YYYY-MM-DD HH24:MI:SS',
+						    description => "can be used to specify the date format used in the input"},
+						   ]}); :>
+    do {
+	my $name=$data->getName();
+	$this->debugPrint (3, "examining " . $name . " : " . $this->getTypeAsText(data => $data));
+	$name;
+    };
+}
+
+################################################################################
+
+sub cloneColumn {
+   <:= $po->contract('cloneColumn' => {description => 'creates a column in a table based on metadata from another table',
+					getopts => [{name => 'table' ,
+						     required => 't',
+						     description => 'table to create table on',},
+						    {name => 'column',
+						     required => 't',
+						     ref => 'DB::FieldMetaData',
+						     description => 'metadata for cloned column',},
+						   ]}); :>
+
+   do {
+       my $cloneSQL = "alter table " . $table->getName();
+       $cloneSQL .= " add " . $this->validColumnName(data => $column->getName());
+       $cloneSQL .= " " . $this->getTypeAsText(data => $column,
+					       full => 't');
+       $this->execute(sql => $cloneSQL,
+		      verbose => 1);
+   };
+}
+
+################################################################################

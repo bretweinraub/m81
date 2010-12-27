@@ -1,0 +1,102 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'waitForNewSugarChanges.pl' , 
+                                   description => '',
+                                   include => [DB::DBHandleFactory,
+					       StateMachine::SMUtil],
+                                   getopts => [
+# 					       { tag => '',
+#                                                 variable => '$',
+#                                                 required => 't',
+#                                                 description => '',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+    use strict;
+
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+
+my $sourceNamespace=$ENV{$ENV{sourceDB} . "_m80namespace"};
+my $sourceHandle = DB::DBHandleFactory::newDBHandle(namespace => $sourceNamespace);
+
+my $pollTableList = $ENV{pollTableList};
+debugPrint (1, "pollTableList is $pollTableList");
+
+my $pollInterval = $ENV{pollInterval};
+debugPrint(1, "pollInterval is $pollInterval");
+
+my $sql = "select max(date_modified) date_modified , max(date_entered) date_entered from (";
+my $_sql;
+
+my @tables = split (/\s+/,$pollTableList);
+
+foreach my $table (@tables) {
+    $_sql .= " union " if $_sql;
+    if ($table =~ /accounts_contacts/) {
+	# accounts_contacts doesn't have a date_entered field ; how wonderfully inconsistent
+	$_sql .= "select max(date_modified) as date_modified, max(date_modified) as date_entered from $table";
+    } elsif ($table =~ /cases_audit/) {
+	# cases_audit doesn't have a date_modified, or a date_entered field ; how consistently inconsistent
+	$_sql .= "select max(date_created) as date_modified, max(date_created) as date_entered from $table";	
+    } else {
+	$_sql .= "select max(date_modified) as date_modified, max(date_entered) as date_entered from $table";
+    } 
+}
+
+$sql .= $_sql . ") as maintable";
+
+my $keepWaiting = 1;
+my $date_modified;
+my $date_entered;
+my $sleepVal = 1; 
+my $sleepCounter = 0;
+
+
+# XXX - to do ; generate the _V views if they do not exists.
+# create view accounts_v as select 	accounts.*, \n	accounts_cstm.* \nfrom 	accounts inner join accounts_cstm \non 	accounts.id = accounts_cstm.id_c
+# create view leads_v as select 	leads.*, leads_cstm.* from 	leads inner join leads_cstm on 	leads.id = leads_cstm.id_c;
+# create view cases_v as select 	cases.*, cases_cstm.* from 	cases inner join cases_cstm on 	cases.id = cases_cstm.id_c;
+
+while ($keepWaiting) {
+    my %results = %{$sourceHandle->getData(sql => $sql)};
+
+#print Dumper(%results);
+
+    $date_modified = $results{date_modified}[0];
+    $date_entered = $results{date_entered}[0];
+
+    debugPrint (1, "date_entered is $date_entered");
+    debugPrint(1, "date_modified is $date_modified");
+    my %lastUpdated = %{$dbhandle->getData(sql =>  "select count(*) keepWaiting from etlmanager where last_update >= (select max(last_run_date) from (select to_date('$date_modified', 'YYYY-MM-DD HH24:MI:SS') last_run_date from dual union select to_date('$date_entered', 'YYYY-MM-DD HH24:MI:SS') last_run_date from dual)) and etlmanager_name = '" . $ENV{NAME} . "'")};
+
+
+    $keepWaiting = $lastUpdated{KEEPWAITING}[0];
+
+    debugPrint(1, "keepWaiting is $keepWaiting");
+    if ($sleepCounter++ > $sleepVal) {
+	$sleepVal++;
+	$sleepCounter = 0;
+    }
+    debugPrint(0, "sleeping for $sleepVal ($sleepCounter) secs");
+    sleep ($sleepVal);
+}
+
+my %lastUpdated = %{$dbhandle->getData(sql =>  "select to_char(max(last_run_date),'YYYY-MM-DD HH24:MI:SS') runDate from (select to_date('$date_modified', 'YYYY-MM-DD HH24:MI:SS') last_run_date from dual union select to_date('$date_entered', 'YYYY-MM-DD HH24:MI:SS') last_run_date from dual)")};
+
+my $runDate = $lastUpdated{RUNDATE}[0];
+
+StateMachine::SMUtil::createContext (tag => "runDate",
+				     task_id => $ENV{parent_task_id},
+				     value => $runDate,
+				     dbhandle => $dbhandle);
+
+debugPrint(1, "rundate is $runDate");
+
+cleanup 0; 

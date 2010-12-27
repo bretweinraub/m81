@@ -1,0 +1,145 @@
+<: #-*- perl -*-
+
+# $m80path = [{ command => embedperl }]
+use Helpers::PerlObject;
+my $po = Helpers::PerlObject->new( name => 'Template::SimpleTextArchive',
+                                   include => [ 'File::Basename'],
+                                   description => "Bundle several files into a single archive, but do it in plain text.
+
+Designed to be used with a runPath or some templating engine. Since both the filenames
+and file contents are available in plain text it is easy to turn these archives into 
+complex templates. 
+
+This acts a lot like tar, you can point it at a directory and it will pull all the files
+in that archive together into a single ArchiveFile. The big difference from tar is that it 
+is all ascii based, so you are free to edit the ArchiveFile in plain text.
+
+The archive file can be made to have a '\$m80path' directive in the file (and SHOULD have one if
+the archive contains other embedded m80 templates - that define their own '\$m80path' directive.)
+In addition to the individual file's contents being available in plain text, the file NAME is
+also available in plain text. This means that you can change the output file easily by templating
+the archive (with an '\$m80path' variable) and expanding a filename.
+
+The file meta-information is saved in a string that looks like the following:
+
+        <!-- FILE|\$file|\$mode\[\|DoNotOverride] -->
+
+Where \$file is the filename relative to the \$SimpleTextArchive->getRootDirectory(), the mode is
+something like 644, or 755 and is determined at the time of the creation of the Archive. The 
+DoNotOverride flag is optional and specifies what to do if the file already exists in the extraction
+directory. If it exists and is set to '1' then the file will overwrite an existing file during
+the extract phase. THE DEFAULT IS TO OVERWRITE EXISTING FILES.
+
+" );
+
+$po->setMembers([{ name => 'debug', description => 'turn on debugging output' },
+                 { name => 'rootDirectory', description => 'The directory that is the root of the created ArchiveFile' },
+                 { name => 'archiveFile', description => 'The name/location of the archive file' },
+                 { name => 'defaultRunPathHeader', description => 'write a default runPath header into the template file' }, 
+                 { name => 'verbose', description => 'Print verbose output' },
+                 ]);
+
+print $po->dump();
+:>
+
+sub _shell_cmd {
+    my ($self, $cmd) = @_;
+    print STDERR $cmd, "\n" if $self->getDebug() > 1;
+    return `$cmd`;
+}
+
+sub create {
+    <:= $po->contract( 'create' => {description => 'Create a new archive file', getopts => []}); :>
+
+    my ($rootdir, $outputfile) = ($this->getRootDirectory, $this->getArchiveFile);
+    my @files = $this->_shell_cmd("find $rootdir -type 'f'");
+
+    open(O, ">$outputfile") || die "unable to open merged file $outputfile: $!";
+
+    if ($this->getDefaultRunPathHeader) {
+        print O "{! # -*- perl -*-
+# \$m80path = [{ command => \"embedperl -magicStart '{' -magicEnd '}' -embedderChar '!'\"}]
+use Env;
+
+!}";
+    }
+
+    for my $file (@files) {
+        chomp $file;
+
+        my $mode = (stat($file))[2];
+        $mode = sprintf( "%04o", $mode & 07777);
+
+        open(F, "<$file") || die "unable to open file to be merged $file: $!";
+
+        $file =~ s/$rootdir\///;
+        print STDERR "$file\n" if $this->getVerbose;
+
+        print O "<!-- FILE|$file|$mode -->\n";
+        while (<F>) { 
+            print O;
+        }
+        print O "\n";
+        close(F);
+    }
+}
+
+sub extract {
+    <:= $po->contract( 'extract' => {description => 'Extract an archive file to a root directory', getopts => []}); :>
+
+    my ($infile, $root) = ($this->getArchiveFile, $this->getRootDirectory);
+    $root ||= './';
+
+    open(I, "<$infile") || die "unable to open $infile: $!";
+    print STDERR "infile is $infile\n" if $this->getDebug > 1;
+    my $f_opened = 0;
+    my ($mode, $file, $last_mode, $last_file, $do_not_overwrite_existing_file);
+    while (<I>) {
+        if (s/^\s*<!--\sFILE\|(.+?)\s*-->//) {
+            $last_mode = $mode;
+            $last_file = $file;
+            ($file, $mode, $do_not_overwrite_existing_file) = split /\|/, $1;
+
+            print STDERR "Found a match $file - $mode - $do_not_overwrite_existing_file:\n" if $this->getDebug > 1;
+
+            if ($f_opened) {
+                close(F);
+                $this->_shell_cmd("chmod $last_mode $last_file");
+                $f_opened = 0;
+            }
+
+            # determine the final filename
+            $file =~ s/^\.\///;
+            $file = "$root/$file";
+
+            # should we overwrite the file if it exists?
+            if (-f $file && $do_not_overwrite_existing_file) {
+                $do_not_overwrite_existing_file = 1;
+            } else {
+                $do_not_overwrite_existing_file = 0;
+            }
+
+            # open a new file , if we are supposed to
+            if ($do_not_overwrite_existing_file) {
+                print STDERR "$file exists and do_not_overwrite is on - skipping file\n" if $this->getVerbose;
+            } else {
+
+                print "$file\n" if $this->getVerbose;
+
+                my $dir = dirname($file);
+                $this->_shell_cmd("mkdir -p $dir");
+                
+                open(F, ">$file") || die "unable to open $file: $!";
+                $f_opened = 1;
+                $_ = '';
+            }
+        }
+
+        print F unless $do_not_overwrite_existing_file;
+    }
+
+}
+
+
+
+1;

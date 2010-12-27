@@ -1,0 +1,58 @@
+<: # -*-sh-*-
+use Helpers::shellHelpers; # $m80path = [{command => "embedperl"}, {command => "m4", chmod => "+x" }];
+print Helpers::shellHelpers::shellScript ( r => [],
+                                           getopts => '(s,sugardescriptor,SUGARCRM),(m,-moduleName),(-f,force)'); 
+:>
+
+sugardir=$(eval "echo \$"$(echo $sugardescriptor"_deploy_path"))
+
+if [ -z "$sugardir" ]; then
+    cleanup 1 could not find sugar info in your environment based on descriptor $sugardescriptor \; maybe you should run mexec on this script or check your metadata
+fi
+
+if [ -d $sugardir/modules/$moduleName -a -z "$force" ] ; then
+    cleanup 1 module $moduleName exists\; set \-force
+fi
+
+docmd mkdir -p $sugardir/modules/$moduleName/language
+docmd touch $sugardir/modules/$moduleName/language/en_us.lang.php
+docmd touch $sugardir/modules/$moduleName/index.php
+#
+# Menu.php -
+#
+docmd touch $sugardir/modules/$moduleName/Menu.php
+#
+docmd touch $sugardir/modules/$moduleName/Forms.php
+docmd touch mkdir -p $sugardir/custom/application/Ext/Include
+docmd touch $sugardir/custom/application/Ext/Include/modules.ext.php
+
+################################################################################################################################################################
+
+# ~/sugarcrm-4.5.1d/htdocs/sugarcrm/custom/application/Ext/Include/modules.ext.php
+
+# // $beanList['Circuits'] = 'Circuit';
+# // $beanFiles['Circuit'] = 'modules/Circuits/Circuit.php';
+# $moduleList[] = 'Circuits';    # AutoGen 
+
+################################################################################################################################################################
+
+
+# ~/sugarcrm-4.5.1d/htdocs/sugarcrm/custom/include/language/en_us.lang.php
+
+# $app_list_strings['moduleList'] = array (
+# 					 'Circuits' => 'Circuits',
+# 					 );
+
+# $app_strings['LBL_CIRCUIT'] ='Circuit';
+# $app_strings['LBL_CIRCUITS'] ='Circuits';
+
+################################################################################################################################################################
+
+
+
+docmd newSugarModule.pl -s $sugardir -m $moduleName
+
+
+cleanup 0
+
+    

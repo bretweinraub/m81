@@ -1,0 +1,32 @@
+<: #-*- perl -*-
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'allChildTaskIDs.pl.m80.pl' , 
+                                   description => 'print a list of child task ids for this master_task_id',
+                                   include => ['dbutil', 'Data::Dumper'],
+#                                   suppressRequiredVariableCheck => 't',
+                                   getopts => [
+					       { tag => 'master_task_id:i',
+                                                 variable => '$master_task_id',
+                                                 required => 't',
+                                                 description => 'The master_task_id that is used as the root for deriving all related child tasks.',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+require "dbConnect.pl";
+ 
+$sql = " select 	task_id 
+	 from 	task  
+         start with 
+		task.task_id = 	$master_task_id
+	 connect by prior 
+		task.task_id = task.parent_task_id 
+";
+
+dbutil::loadSQL ($dbh, $sql, \%s, $debug);
+print "@{ $s{TASK_ID} }\n";
+
+cleanup 0; # "

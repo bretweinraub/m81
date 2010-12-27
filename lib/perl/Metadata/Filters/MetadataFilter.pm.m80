@@ -1,0 +1,67 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "MetadataFilter",
+			           isa => 'ProceduralPropertyGroup',
+                                   include => [],
+                                   example =>
+q[
+    my $MetadataFilter = $MetadataFilter->new();   # stub example .... expand
+],
+				   description => 'Base class for all Metadata Filters.');
+
+$po->setMembers([
+                 {name => "description", 
+		  type => "string", 
+		  description => "Description of this MetadataFilter ... should hopefully be somewhat informative"},
+                 {name => "name", 
+		  type => "string", 
+		  description => "Name of this Property Group"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+
+}
+
+sub buildPath {
+# remove the spaces from the tag below
+    <:= $po->contract('buildPath' => {description => "Builds out a filesystem path and updates a metadata object accordingly.  This will manage creating os specific paths.",
+				      getopts => [{name => object,
+						   ref => "MetaDataObject",
+						   description => "The object to be modified",
+						   required => 1},
+						  {name => root,
+						   description => "The root of the path to be updated",
+						   required => 1},
+						  {name => tag,
+						   description => "The tag to be set on the object",
+						   required => 1},
+						  {name => value,
+						   description => "The value to be set for the tag",
+						   required => 1},
+						  {name => osflavor,
+						   description => "Operating system for the host in question.  If the machine is not a windows machine, we do not have to generate windows paths for it",},
+						   ]}); :>
+
+   $object->{$tag} = $root . "/" . $value;						       
+   $object->{$tag . "_unix"} = $root . "/" . $value;						       
+    $object->{$tag . "_windows"} = __unix2cygwin($root . "/" . $value) if ($osflavor =~ /win/);
+}
+
+sub __unix2cygwin {
+    my ($path) = @_;
+    $path =~ s/\~/$ENV{HOME}/g;
+    $path =~ s!/cygdrive/\w!!;
+    return "C:/cygwin$path";
+}
+
+	    
+

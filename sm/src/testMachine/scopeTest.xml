@@ -1,0 +1,46 @@
+<ChainGang name="$(env.M80_BDF)" 
+	   wwwroot="/var/www/html/$(env.M80_BDF)/taskData"
+	   urlbase="/$(env.M80_BDF)/taskData">
+
+  <ChainDB username="$(env.CONTROLLER_USER)" 
+	   password="$(env.CONTROLLER_PASSWD)" 
+	   port="$(env.CONTROLLER_PORT)"
+	   host="$(env.CONTROLLER_HOST)"
+	   sid="$(env.CONTROLLER_SID)"/>
+
+  <module>
+
+
+
+    <tasks>
+      <task name="scope_test_1" startAction="scope_test"/>
+      <task name="scope_test_2" startAction="scope_test"/>
+    </tasks>
+
+    <actions>
+      <action name="scope_test"
+	      maxFailures="3"
+	      command="exit 0">
+	<transitionMap>
+	  <transition type="returnCode" 
+		      value="0" 
+		      code="$thistask->transitionTo(q(__SUCCESS__))">
+	    <scope field="$(taskobj.taskname)"
+		   value="scope_test_1"/>
+	    <scope field="$(task.tag)"
+		   value="value"/>
+	  </transition>
+	  <transition type="returnCode" 
+		      value="0" 
+		      code="$thistask->transitionTo(q(__SUCCESS__))">
+	    <scope field="$(taskobj.taskname)"
+		   value="scope_test_2"/>
+	  </transition>
+	  <transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(__FAILED__))"/>
+	</transitionMap>
+      </action>
+    </actions>
+
+
+  </module>
+</ChainGang>

@@ -1,0 +1,82 @@
+<: #-*- perl -*- # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'extract.pl' , 
+                                   description => '
+Extraction script for RtgETLImpl module.  Unlikely you would ever call this 
+script directly except as part of task debugging.  See the documentation on the debugging
+chassis for more information on how to do this.',
+                                   include => [RTG::ETLHelper,
+					       DB::Utils],
+                                   getopts => [{name => 'numDays:i',
+						default => 1,
+						description => 'number of days to extract from RTG at a time, defaults to 1',},
+					       {name => 'once',
+						description => 'only process a single router, then exit.  Useful for debugging only',},],
+                                   );
+print $ps->dump() . $ps->pod();
+:>
+
+######################################################################################################################################################
+                                                                                # 
+use strict;                                                                     # SETUP
+                                                                                # 
+######################################################################################################################################################$
+                                                                                # 
+my $RTGHelper = RTG::ETLHelper->new();                                          # RTG::Helper loads all the metadata from the environment
+my ($router_tableName,                                                          # string
+    $stageTable,                                                                # DB::Table
+    $stageTableName,                                                            # string
+    $sourceHandle,                                                              # DB::Handle
+    $targetHandle) = ($RTGHelper->getRouterTableName(),                         # DB::Handle
+		      $RTGHelper->getStageTable(),                              # 
+		      $RTGHelper->getStageTableName(),		                # 
+		      $RTGHelper->getSourceHandle(),                            # 
+		      $RTGHelper->getTargetHandle());                           # 
+		                                                                # 
+$targetHandle->truncateTable(name => $stageTableName);                          # can be done with the ->Import() function, but we need to call that
+                                                                                # function repeatedly so we call it once here.
+                                                                                # 
+#######################################################################################################################################################
+# 
+my $routerData = $targetHandle->newRowSet(sql => "select distinct rid from $router_tableName order by rid", 
+					  lc => 't');
+while ($routerData->next()) {
+    my $rid = $routerData->item('RID'); # bug - for  some reason lower case columns don't work
+    my $sourceTableName = $ENV{tableName} . "_" . $rid;
+    debugPrint(0, "processing table $sourceTableName");
+
+    #get the last row processed locally
+
+    my $maxDate = $RTGHelper->getMaxDate(rid => $rid);
+    my $sourceTable = $sourceHandle->newTable(name => "$sourceTableName");
+    my $sourceDateRangeData = $sourceHandle->newRowSet(sql => "select max(dtime) as max_dtime, min(dtime) as min_dtime from $sourceTableName" .
+						       ($maxDate ? " where dtime > " . SQLStringify(data => $maxDate) : ""));
+
+    $sourceDateRangeData->next();
+    my $max_dtime = $sourceDateRangeData->item("max_dtime");
+    my $min_dtime = $sourceDateRangeData->item("min_dtime");
+
+    
+    debugPrint(0, "max: $max_dtime ; min: $min_dtime ; max_date: $maxDate");
+
+    # get one day of data
+    
+    my $fetchSQL = $RTGHelper->generateDayQuery(rid => $rid,
+						numDays => $numDays,
+						tableName => $sourceTableName,
+						sourceMax => $max_dtime,
+						sourceMin => $min_dtime,
+						targetMax => $maxDate);
+
+    my $RowSet = $sourceHandle->newRowSet(sql => $fetchSQL);
+
+    debugPrint(0, "read " . $RowSet->getRows() . " row(s) from $sourceTableName");
+
+    $stageTable->Import(data => $RowSet->getResults(),
+			sourceTable => $sourceTable);
+    Confess "once set"
+	if $once;
+}
+ 
+cleanup 0; 

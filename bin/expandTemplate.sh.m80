@@ -1,0 +1,13 @@
+<: # -*-sh-*-
+use Helpers::shellHelpers; # $m80path = [{command => embedperl}, {command => m4, chmod => '+x' }];
+print Helpers::shellHelpers::shellScript ( getopts => '(m,-moduleName),(t,-template)');
+:>
+
+##printmsg Available Modules are `ls $(dirname $template)/*.tmpl.m80`
+
+export MODULE_NAME=$moduleName
+docmd runPath -file $template -dest $moduleName.tmpl
+docmd simpleTar.pl -x -r $moduleName -f $moduleName.tmpl
+docmd rm -rf $moduleName.tmpl
+
+cleanup 0

@@ -1,0 +1,43 @@
+<: #-*- perl -*-
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'shell2context.pl' , 
+                                   description => 'description for shell2context',
+                                   include => [DB::DBHandleFactory],
+                                   getopts => [
+  					       { tag => 'task_id:i',
+						 description => 'task_id to update',},
+					       { tag => 'nodelete',
+						 description => "don't delete the row first",},
+					       { tag => 'verbose',
+						 description => "don't delete the row first",},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+    my $dbhandle = DB::DBHandleFactory::newDBHandle();
+ 
+while (<>) {
+  SWITCH: {
+      next if /^\#/;
+      /export\s+([\w_]+)="(.*)"/ && do {
+	  my $tag=$1;
+	  my $value=$2;
+          $value =~ s/\'//g;
+	  if ($task_id) {
+	      $dbhandle->execute (sql => "delete from task_context where task_id = $task_id and tag = '$tag'", 
+				  verbose => ($main::verbose ? $main::verbose : 0)) unless $nodelete;
+	      $dbhandle->execute (sql => "insert into task_context (task_id, tag, value) values ($task_id, '$tag', '$value')", 
+				  verbose => ($main::verbose ? $main::verbose : 0));
+	    } else {
+		print STDERR "insert into task_context (task_id, tag, value) values (\$task_id, '$tag', '$value')\n";
+	    }
+	  last SWITCH;
+      };
+      confess ("failed to parse line $_");
+  }
+}
+
+cleanup 0; # "

@@ -1,0 +1,31 @@
+<: # -*-sh-*-
+use Helpers::shellHelpers; # $m80path = [{command => "embedperl"}, {command => "m4", chmod => "+x" }];
+print Helpers::shellHelpers::shellScript ( r => [THIS],
+                                  getopts => ''); 
+:>
+
+## set -x
+
+uname=$(uname)
+
+mpstat >& /dev/null
+
+if [ $? -eq 0 ]; then 
+    if [ $uname = "Linux" ]; then
+	threads=`expr $(mpstat -P ALL |wc -l) - 4`
+	threadArg=-j${threads}
+    fi
+fi
+
+build_root=\$${THIS}_deploy_PATH
+
+docmd cd $(eval echo $build_root)
+docmd mkdir -p build
+
+export BUILD_ROOT=`pwd`
+export BUILD_DIR=$BUILD_ROOT/build
+docmd make $threadArg build
+
+cleanup 0
+
+    

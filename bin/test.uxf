@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?><umlet_diagram><element><type>com.umlet.element.base.Class</type><coordinates><x>20</x><y>20</y><w>100</w><h>75</h></coordinates><panel_attributes>
+wbsproduct
+--
+updated_dt DATE
+inserted_dt DATE
+wbsproduct_id NUMBER(10)
+is_deleted VARCHAR2(1)
+description VARCHAR2(1024)
+wbsproduct_name VARCHAR2(64)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>40</x><y>40</y><w>100</w><h>90</h></coordinates><panel_attributes>
+acl_rule
+--
+updated_dt DATE
+inserted_dt DATE
+acl_rule_id NUMBER(10)
+acl_rule_name VARCHAR2(64)
+is_deleted VARCHAR2(1)
+acl_rule_type_id NUMBER(10)
+description VARCHAR2(1024)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>60</x><y>60</y><w>100</w><h>75</h></coordinates><panel_attributes>
+acl_rule_type
+--
+updated_dt DATE
+acl_rule_type_name VARCHAR2(64)
+inserted_dt DATE
+is_deleted VARCHAR2(1)
+acl_rule_type_id NUMBER(10)
+description VARCHAR2(1024)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>80</x><y>80</y><w>100</w><h>75</h></coordinates><panel_attributes>
+rt_account
+--
+updated_dt DATE
+inserted_dt DATE
+sugar_account_id VARCHAR2(36)
+rtticket_id NUMBER(10)
+is_deleted VARCHAR2(1)
+rt_account_id NUMBER(10)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>100</x><y>100</y><w>100</w><h>75</h></coordinates><panel_attributes>
+rt_contact
+--
+updated_dt DATE
+rt_contact_id NUMBER(10)
+inserted_dt DATE
+rtticket_id NUMBER(10)
+is_deleted VARCHAR2(1)
+sugar_contact_id VARCHAR2(36)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>120</x><y>120</y><w>100</w><h>105</h></coordinates><panel_attributes>
+azlocation
+--
+updated_dt DATE
+z_location_id FLOAT
+inserted_dt DATE
+azlocation_id NUMBER(10)
+is_deleted VARCHAR2(1)
+location_number NUMBER(3)
+quoterequest_id NUMBER(10)
+a_location_id FLOAT
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>140</x><y>140</y><w>100</w><h>75</h></coordinates><panel_attributes>
+worklist
+--
+updated_dt DATE
+inserted_dt DATE
+worklist_id NUMBER(10)
+worklist_name VARCHAR2(64)
+is_deleted VARCHAR2(1)
+description VARCHAR2(1024)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>160</x><y>160</y><w>100</w><h>75</h></coordinates><panel_attributes>
+worklist_employee
+--
+updated_dt DATE
+inserted_dt DATE
+worklist_id NUMBER(10)
+employee_id NUMBER(10)
+worklist_employee_id NUMBER(10)
+is_deleted VARCHAR2(1)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>180</x><y>180</y><w>100</w><h>75</h></coordinates><panel_attributes>
+workorder_role_type
+--
+workorder_role_type_name VARCHAR2(64)
+updated_dt DATE
+inserted_dt DATE
+workorder_role_type_id NUMBER(10)
+is_deleted VARCHAR2(1)
+description VARCHAR2(1024)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>200</x><y>200</y><w>100</w><h>75</h></coordinates><panel_attributes>
+rt_circuit
+--
+updated_dt DATE
+inserted_dt DATE
+rt_circuit_id NUMBER(10)
+rtticket_id NUMBER(10)
+sugar_circuit_id VARCHAR2(36)
+is_deleted VARCHAR2(1)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>220</x><y>220</y><w>100</w><h>105</h></coordinates><panel_attributes>
+workorder_party
+--
+updated_dt DATE
+resource_id FLOAT
+inserted_dt DATE
+workorder_role_type_id NUMBER(10)
+workorder_party_id NUMBER(10)
+is_deleted VARCHAR2(1)
+workorder_id NUMBER(10)
+resource_type VARCHAR2(32)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>240</x><y>240</y><w>100</w><h>75</h></coordinates><panel_attributes>
+acl_user
+--
+updated_dt DATE
+inserted_dt DATE
+acl_rule_id NUMBER(10)
+is_deleted VARCHAR2(1)
+acl_user_id NUMBER(10)
+user_name VARCHAR2(16)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>260</x><y>260</y><w>100</w><h>165</h></coordinates><panel_attributes>
+location
+--
+country VARCHAR2(64)
+location_id NUMBER(10)
+zipcode VARCHAR2(12)
+state VARCHAR2(32)
+updated_dt DATE
+addr2 VARCHAR2(256)
+city VARCHAR2(64)
+inserted_dt DATE
+nxx VARCHAR2(8)
+addr1 VARCHAR2(256)
+is_deleted VARCHAR2(1)
+npa VARCHAR2(8)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>280</x><y>280</y><w>100</w><h>75</h></coordinates><panel_attributes>
+workorder_priority
+--
+description VARCHAR2(1024)
+updated_dt DATE
+inserted_dt DATE
+workorder_priority_id NUMBER(10)
+is_deleted VARCHAR2(1)
+workorder_priority_name VARCHAR2(64)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>300</x><y>300</y><w>100</w><h>90</h></coordinates><panel_attributes>
+workorder_attachment
+--
+workorder_attachment_id NUMBER(10)
+name VARCHAR2(256)
+workorder_id NUMBER(10)
+updated_dt DATE
+inserted_dt DATE
+filename VARCHAR2(256)
+is_deleted VARCHAR2(1)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>320</x><y>320</y><w>100</w><h>165</h></coordinates><panel_attributes>
+workorder
+--
+parent_workorder_id FLOAT
+workorder_status_id NUMBER(10)
+workorder_id NUMBER(10)
+description VARCHAR2(1024)
+created_employee_id FLOAT
+updated_dt DATE
+resource_id FLOAT
+inserted_dt DATE
+workorder_priority_id NUMBER(10)
+workorder_name VARCHAR2(64)
+is_deleted VARCHAR2(1)
+resource_type VARCHAR2(32)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>340</x><y>340</y><w>100</w><h>90</h></coordinates><panel_attributes>
+quoterequest
+--
+sugar_account_id FLOAT
+workorder_id NUMBER(10)
+quoterequest_id NUMBER(10)
+account_name VARCHAR2(150)
+updated_dt DATE
+inserted_dt DATE
+is_deleted VARCHAR2(1)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>360</x><y>360</y><w>100</w><h>210</h></coordinates><panel_attributes>
+qr_product_location
+--
+country VARCHAR2(64)
+a_or_z VARCHAR2(1)
+location_number NUMBER(3)
+zipcode VARCHAR2(12)
+state VARCHAR2(32)
+addr2 VARCHAR2(256)
+updated_dt DATE
+city VARCHAR2(64)
+nxx VARCHAR2(8)
+inserted_dt DATE
+qr_product_location_id NUMBER(10)
+addr1 VARCHAR2(256)
+is_deleted VARCHAR2(1)
+npa VARCHAR2(8)
+quoterequest_product_id NUMBER(10)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>380</x><y>380</y><w>100</w><h>90</h></coordinates><panel_attributes>
+employee
+--
+email_address VARCHAR2(64)
+description VARCHAR2(1024)
+employee_name VARCHAR2(64)
+updated_dt DATE
+inserted_dt DATE
+employee_id NUMBER(10)
+is_deleted VARCHAR2(1)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>400</x><y>400</y><w>100</w><h>75</h></coordinates><panel_attributes>
+workorder_note
+--
+workorder_note_id NUMBER(10)
+workorder_id NUMBER(10)
+note CLOB
+updated_dt DATE
+inserted_dt DATE
+is_deleted VARCHAR2(1)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>420</x><y>420</y><w>100</w><h>75</h></coordinates><panel_attributes>
+sw_interface_circuit
+--
+sw_interface_circuit_id NUMBER(10)
+updated_dt DATE
+inserted_dt DATE
+sugar_circuit_id VARCHAR2(36)
+is_deleted VARCHAR2(1)
+interfaceid NUMBER(10)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>440</x><y>440</y><w>100</w><h>165</h></coordinates><panel_attributes>
+quoterequest_product
+--
+target_pricing VARCHAR2(256)
+managed_services_needed VARCHAR2(1)
+power_requirements VARCHAR2(64)
+quoterequest_id NUMBER(10)
+updated_dt DATE
+ip_bandwidth VARCHAR2(64)
+amount_of_bandwidth VARCHAR2(64)
+inserted_dt DATE
+wbsproduct_id NUMBER(10)
+is_deleted VARCHAR2(1)
+quoterequest_product_id NUMBER(10)
+amount_of_space VARCHAR2(64)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>460</x><y>460</y><w>100</w><h>75</h></coordinates><panel_attributes>
+workorder_status
+--
+workorder_status_id NUMBER(10)
+workorder_status_name VARCHAR2(64)
+description VARCHAR2(1024)
+updated_dt DATE
+inserted_dt DATE
+is_deleted VARCHAR2(1)
+</panel_attributes><additional_attributes></additional_attributes></element>
+<element><type>com.umlet.element.base.Class</type><coordinates><x>480</x><y>480</y><w>100</w><h>75</h></coordinates><panel_attributes>
+workorder_history
+--
+workorder_history_id NUMBER(10)
+workorder_id NUMBER(10)
+description VARCHAR2(512)
+updated_dt DATE
+inserted_dt DATE
+is_deleted VARCHAR2(1)
+</panel_attributes><additional_attributes></additional_attributes></element>
+</umlet_diagram>

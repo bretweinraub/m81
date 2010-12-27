@@ -1,0 +1,32 @@
+m4_define(`SHELL',/bin/bash)m4_dnl ` -*-shell-script-*-
+m4_include(shell/shellScripts.m4)m4_dnl
+# $m80path = [{command => "m4", chmod => "+x" }]
+shell_load_functions(printmsg,cleanup,require,docmd,docmdi,docmdqi,checkfile)
+shell_exit_handler
+
+DIRECTORY=$(pwd)
+
+PATTERN="*"
+
+shell_getopt((d, DIRECTORY),(m, MODULE),(p, PATTERN),(D, dirvar))
+
+m4_changequote(!*!,*!*)
+
+printmsg args are $*
+
+if [ -n "${dirvar}" ]; then
+    DIRECTORY=$(eval "echo \$"${MODULE}"_"{$dirvar}"_DIR") 
+else
+#if [ -n "${MODULE}" ]; then
+    DIRECTORY=$(eval "echo \$"${MODULE}"_DEPLOY_DIR") 
+fi
+
+docmd cd $DIRECTORY/t
+
+for test in ${PATTERN}.t; do
+    printmsg matched $test
+    task_id=$(SHELL $test)
+done
+
+M80_SUPRESS_PERIOD=true
+printmsg Look for log files in http://${CONTROLLER_DEPLOY_HOST}:80/${M80_BDF}/taskData/${task_id}" "

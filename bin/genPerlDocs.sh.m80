@@ -1,0 +1,20 @@
+<: # -*-sh-*-
+use Helpers::shellHelpers; # $m80path = [{command => "embedperl"}, {command => "m4", chmod => "+x" }];
+print Helpers::shellHelpers::shellScript ( r => [webdir],
+                                           getopts => '(w,webdir)'); 
+:>
+
+
+printmsg webdir is $webdir
+
+for f in $(find . | perl -nle '/\.(pm|pl)$/ && {print}'); do
+    basename=$(basename $f)
+    dirname=$(dirname $f)
+    docmd mkdir -p $webdir/$dirname
+    printmsg 'pod2html < '$f' > '$webdir'/'$dirname'/'$basename'.html'
+    pod2html < $f > $webdir/$dirname/$basename.html
+done
+
+cleanup 0
+
+    

@@ -1,0 +1,103 @@
+<@ # -*-perl-*-
+# $m80path = [{ command => "embedperl -embedderChar @" }]
+    use Env qw(filter);
+@><: # -*-perl-*-
+# $m80path = [{ command => embedperl }]
+use Helpers::PerlObject;
+my $po = Helpers::PerlObject->new(name => 'Metadata::Validation::<@=$filter@>',
+                                  isa => 'Metadata::Validation::Internal::RemoteValidation',
+                                  include => ['Metadata::Compiler::Message',
+                                              'Metadata::Utils',
+                                              ],
+                                  description => q!
+
+Some Description.
+                                  !,
+                                  example => q!
+Example:
+
+    use Metadata::Validation::<@=$filter@>;
+    my $validation = new Metadata::Validation::<@=$filter@>();
+    $study->getEndFilterList->addFilter( $validation );
+
+!);
+
+print $po->dump();
+:>
+
+sub _new {
+    my $this = shift;
+    $this->setName( '<@=$filter@>' );
+    $this->setDescription( 'DESCRIPTION' );
+
+    # confirm/specify the following items!
+    $this->setClassMask('host$');
+    $this->setFixitFile('<@=$filter@>_fixit.sh');
+    $this->setRemoteCommand('exit 0');
+}
+
+sub assert {
+    <:= $po->contract( assert => { description => 'This function is a callback used to more flexibly determine if an object should be processed. Return a boolean value to continue/halt processing this option.',
+                                   getopts => [ { name => 'obj',
+                                                  description => 'A MetaDataObject that is currently being processed',
+                                                  required => t,
+                                                  ref => 'MetaDataObject' } ] } ) :>
+
+     return 1;
+}
+
+
+sub printFixitCommand {
+    <:= $po->contract( printFixitCommand => {
+        description => 'This function is a callback used to get access to printing to the fixit file.',
+        getopts => [ { name => 'fileHandle',
+                       description => 'A filehandle to the opened fixit file',
+                       required => t },
+                     { name => 'obj',
+                       description => 'The MetaDataObject that failed validation',
+                       required => t },
+                     ] } ) :>
+
+}
+
+#
+# perform Validation just runs the remote command via system. You might want to override it.
+#
+# Here is the default implemenation:
+#
+# - This is a tri-state function: 0 = failure, undef = skip, 1 = success
+#
+# sub validate {
+#     <!= $po->contract( performValidation => { description => 'Run the remote command and return boolean. This is a standard "system" based implementation. Override this method in a child class to customize the remote validation code',
+#                                   getopts => [ { name => 'command',
+#                                                  description => 'The generated command (full code) that should be run passed to system or some other mechanism',
+#                                                  required => 't' },
+#                                                { name => 'obj',
+#                                                  description => 'A reference to the object to inspect it (if necessary)',
+#                                                  ref => 'MetaDataObject' } ] } ) !>
+#     # ASSERT
+#     return undef unless $this->getRemoteUser;                                                     
+
+#     #
+#     # Derive the remote command that should be run and validated
+#     my $command = $this->getRemoteCommandBase . ' ' . $this->getRemoteUser . '@' . $this->getRemoteHost . " '" . $this->getRemoteCommand . "'";
+#     $this->debugPrint(1, "validate: $command");
+#
+#
+#     #
+#     # Exec the command
+#     #
+#     # 2 ways to call this command:
+#     # 
+#     ## my ($RC, $stdout, $stderr) = $this->executeCommand( command => $command, messages => $messages );
+#
+#     ## my $RC = $this->executeCommand( command => $command, messages => $messages );
+#     #
+#     # You can also use the second syntax in an if statement
+#     # 
+#     return 0 unless $val && $RC;
+#
+#
+#     return 1;   # SUCCESS
+# }
+

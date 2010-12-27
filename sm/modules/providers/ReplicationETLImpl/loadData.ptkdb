@@ -1,0 +1,49 @@
+$files = {
+           '_</home/bret/dev/m81/lib/perl/DB/Table.pm' => [
+                                                            {
+                                                              'expr' => undef,
+                                                              'value' => '1',
+                                                              'text' => '	    do {
+',
+                                                              'fname' => '/home/bret/dev/m81/lib/perl/DB/Table.pm',
+                                                              'type' => 'user',
+                                                              'line' => '793'
+                                                            },
+                                                            {
+                                                              'expr' => undef,
+                                                              'value' => '1',
+                                                              'text' => '	    $sql .= ($numColumns++ ? ",\\n" : "") . 
+',
+                                                              'fname' => '/home/bret/dev/m81/lib/perl/DB/Table.pm',
+                                                              'type' => 'user',
+                                                              'line' => '1004'
+                                                            }
+                                                          ],
+           '_<./loadData.pl' => [
+                                  {
+                                    'expr' => undef,
+                                    'value' => '1',
+                                    'text' => 'my $targetTable = $dbhandle->newTable(name => $targetTableName, primaryKeyName => $targetTableName  . "_id");
+',
+                                    'fname' => './loadData.pl',
+                                    'type' => 'user',
+                                    'line' => '198'
+                                  }
+                                ]
+         };
+$expr_list = [
+               {
+                 'expr' => '$columnName',
+                 'depth' => -1
+               },
+               {
+                 'expr' => '$this->getPrimaryKeyName()',
+                 'depth' => -1
+               },
+               {
+                 'expr' => '$this',
+                 'depth' => 1
+               }
+             ];
+$eval_saved_text = undef;
+$main_win_geometry = '1255x996+0+6';

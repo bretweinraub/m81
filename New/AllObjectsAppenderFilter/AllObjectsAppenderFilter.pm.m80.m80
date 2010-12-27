@@ -1,0 +1,100 @@
+<@ # -*-perl-*-
+# $m80path = [{ command => "embedperl -embedderChar @" }]
+    use Env qw(filter);
+@><: # -*-perl-*-
+# $m80path = [{ command => embedperl }]
+use Helpers::PerlObject;
+my $po = Helpers::PerlObject->new(name => 'Metadata::Filter::<@=$filter@>',
+                                  isa => 'Metadata::Filter::Internal::Parameterized',
+                                  include => ['Metadata::Compiler::Message',
+                                              'Metadata::Utils',
+                                              'Storable qw(dclone)'],
+                                  description => q!
+
+Some sample description.
+
+This object is a subclass of Parameterized Filter.
+
+Example:
+
+    use Metadata::Filter::<@=$filter@>;
+    use host;
+   
+    my $filter = new Metadata::Filter::<@=$filter@>;
+    $filter->setObjects( [ new host( name => 'someHost',
+                                    ipaddress => '123.456.789.123' ) ] );
+!);
+
+    $po->setMembers([ { name => 'member',
+                        description => 'member description.' },
+
+
+                      ] );
+
+print $po->dump();
+:>
+
+sub _new {
+    my $this = shift;
+
+    # default values for Name and Description
+    $this->setName( '<@=$filter@>' ) unless $this->getName();
+    $this->setDescription( 'DESCRIPTION' ) unless $this->getDescription();
+}
+
+
+sub bind {
+<:= $po->contract( bind => {
+    description => 'This function is a callback called from the execute function during Filter application time. Use this function to manipulate allObjects',
+    getopts => [ { name => 'allObjects',
+                   description => 'The allObjects array',
+                   required => t,
+                   ref => ARRAY },
+                 { name => 'messages',
+                   description => 'The messages array',
+                   required => t,
+                   ref => ARRAY },
+                 ]  } ) :>
+
+    my @objects = ();
+
+    {
+        #
+        # Add your objects to the @objects array here. The @objects array
+        # will be merged into the @allObjects array, after some standard messages are
+        # generated about the objects that you are adding.
+        #
+        # Use a syntax like:
+        #     push @objects, new MetaDataObject( XXX => YYY );
+
+
+
+
+
+
+
+    }
+
+    #
+    # Deep copy the @objects array. In all cases, you want copies of the objects, not
+    # the objects themselves. The reason is that your objects will probably be manipulated
+    # by later filters. If you manipulate the original, then later variations will pick
+    # up those changes in the original object. Hard to find errors. Don't change this unless
+    # you know what you are doing.
+    #
+    @objects = grep { defined } @objects;
+    my $clonedObjects = dclone(\@objects);
+    push @$allObjects, @$clonedObjects;
+
+    #
+    # Loop through all the added objects and do some general reporting on the added
+    # objects. 
+    #
+    for my $obj (@objects) {
+        my $obj_name = ($obj->{name} ? $obj->{name} : "(anonymous)");
+        push @$messages, new Metadata::Compiler::Message( name => $this->getName(),
+                                                          message => 'Creating ' . ref($obj) . " Object named '$obj_name'",
+                                                          level => 'INFO' );
+    }
+
+}

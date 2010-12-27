@@ -1,0 +1,102 @@
+<: # -*- perl -*- # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'extractData.pl' , 
+                                   description => '',
+                                   include => [DB::DBHandleFactory,
+					       DB::ETLHelper],
+                                   getopts => [
+ 					       { 
+						   tag => 'maxDate:s',
+						   variable => '$maxDate',
+						   description => 'upper bound of date to extract',},
+ 					       { 
+						   tag => 'minDate:s',
+						   variable => '$minDate',
+						   description => 'lower bound of date to extract',},
+					       ],);
+print $ps->dump() . $ps->pod();
+:>
+
+our @allObjects;
+
+my $_x=$debug;
+require "Metadata/LoadCollections.pl";
+$debug=$_x;                                                                     # LoadCollections.pl can mess with $main::debug ;
+
+use strict;
+
+debugPrint (1, "THIS is $ENV{THIS}");
+
+my $etlhelper = DB::ETLHelper->new(); # fetches important  metadata related to  ETLDescriptors and the like
+
+<:= $ps->mdimport (createdField,updatedField); :>
+
+my $_createdField;
+my $_updatedField;
+my $defaultDateFormat = "YYYY-MM-DD HH24:MI:SS";
+
+if ($createdField) {
+    my $maxCreatedField = $etlhelper->getTargetHandle()->getDateData(table => $etlhelper->getTargetTableName(),
+								     field => $createdField,
+								     fmt => $defaultDateFormat,
+								     function => 'max',);
+    my $maxUpdatedField = $etlhelper->getTargetHandle()->getDateData(table => $etlhelper->getTargetTableName(),
+								     field => $updatedField,
+								     fmt => $defaultDateFormat,
+								     function => 'max',);
+    
+    $_createdField = $maxCreatedField->{uc($createdField)}[0] . $maxCreatedField->{lc($createdField)}[0];
+    $_updatedField = $maxUpdatedField->{uc($updatedField)}[0] . $maxUpdatedField->{lc($updatedField)}[0];
+
+}
+
+debugPrint (0, "derived max created date as $_createdField");
+debugPrint (0, "derived max updated date as $_updatedField");
+
+
+
+my $fetchSQL = "select * from " . $etlhelper->getSourceTableName();
+my $whereClause;
+
+if ($maxDate or $minDate) {
+    Confess "-maxDate requires -minDate and vice versa" unless $maxDate and $minDate;
+    $whereClause .= "where ($createdField >= " . $etlhelper->getSourceHandle()->stringToDate(data => $minDate); 
+    $whereClause .= "and $createdField < " . $etlhelper->getSourceHandle()->stringToDate(data => $maxDate) . ")";
+    $whereClause .= "or ($updatedField >= " . $etlhelper->getSourceHandle()->stringToDate(data => $minDate) ;
+    $whereClause .= "and $updatedField < " . $etlhelper->getSourceHandle()->stringToDate(data => $maxDate) . ")";
+} else {
+    $whereClause .= "where " 
+	if $_createdField or $_updatedField;
+
+    $whereClause .= " $createdField > " . $etlhelper->getSourceHandle()->stringToDate(data => $_createdField) . ($_updatedField ? " or " : "")
+	if $_createdField;
+
+    $whereClause .= " $updatedField > " . $etlhelper->getSourceHandle()->stringToDate(data => $_updatedField) 
+	if $_updatedField;
+}
+
+$fetchSQL .= " $whereClause" if $whereClause;
+
+debugPrint (0, "fetching data from " . $etlhelper->getSourceTableName() . " " . ($etlhelper->getSourceNamespace()));
+debugPrint (0, $fetchSQL);
+my %results = %{$etlhelper->getSourceHandle()->getData(sql => $fetchSQL, lc => 1)};
+debugPrint (0, "finished fetching data from " . $etlhelper->getSourceTableName() . " " . ($etlhelper->getSourceNamespace()));
+
+debugPrint (0, "read " . $results{rows} . " rows");
+
+debugPrint (0, "starting import");
+my $stageTable = $etlhelper->getStageTable();
+my $sourceTable = $etlhelper->getSourceTable();
+
+$stageTable->cloneSchema(from => $sourceTable);
+$stageTable->Import (data => \%results,
+		     sourceTable => $sourceTable,
+		     truncate => 1);
+# $etlhelper->getTargetTable()->Import (data => \%results,
+# 				      sourceTable => $etlhelper->getSourceTable());
+
+
+debugPrint (0, "finished import");
+ 
+cleanup 0; 

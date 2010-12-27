@@ -1,0 +1,17 @@
+
+<tasks>
+  <task name="import.test" startAction="import.test"/>
+</tasks>
+
+<actions>
+  <action name="import.test"
+	  maxFailures="3"
+	  command="exit 0">
+    <transitionMap>
+      <transition type="returnCode" value="0" code="$thistask->transitionTo(q(__SUCCESS__))"/>
+      <transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(__ERROR__))"/>
+    </transitionMap>
+  </action>
+</actions>
+
+

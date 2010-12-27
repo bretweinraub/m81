@@ -1,0 +1,67 @@
+<@ # $m80path = [{command => "embedperl  -embedderChar @" , }] -*-perl-*- 
+@><: #-*- perl -*-
+<@ use Env; @>
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "M80Repository::<@= $object @>",
+			           isa => 'M80Repository::Base',
+                                   include => [],
+                                   example =>
+q[
+    my $<@= $object @> = $<@= $object @>->new();   # stub example .... expand
+
+
+# or in a m80 repository file
+use M80Repository::<@= $object @>;
+M80Repository::<@= $object @>->new(
+<@ do {
+    @members =  split (/[:\s,]+/, $members);
+    my $num = 0;
+    foreach $member (@members) {
+	print "      $member => \"\",\n";
+    }
+};
+@>)->dump;
+],
+				   description => '<@= $object @> description; stub description please expand');
+
+
+$po->setMembers([
+<@
+do {
+    @members =  split (/[:\s]+/, $members);
+    foreach $member (@members) {
+	print "        {name => \"$member\",\n";
+	print "         description  => \"stub description of $member\",},\n";
+    }
+};@>]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+
+################################################################################
+
+sub dump {
+   <:= $po->contract('dump' => {description => 'dump the output for the m80 repository',
+				getopts => [
+					    #{name => 'data' ,
+					    # required => 't',
+					    # description => 'data to process',},
+					    ]}); :>
+    do {
+	my $ret = $this->SUPER::dump(@_);
+	# uncomment this next  line if this target represents a "deployable" module (mos build, mos deploy)
+	# $ret .= "m80NewCustomModule([" . $this->getName() . "],((deploy," . $this->getSrcPath() . ",deploy.sh)))\n";
+
+	$ret;
+    };
+}
+
+
+

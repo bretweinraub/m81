@@ -1,0 +1,61 @@
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+$moduleHelpers::SCOPED_MODULE = 'SwisheIndexerImpl';
+
+:>
+
+<!-- begin module.xml for SwisheIndexerImpl   -->
+
+<:
+
+
+$module{run} = {a => [{n => run,
+		       p => 1,
+		       t => '__SUCCEEDED__',
+		       c => 'createTask.pl -ta SwisheIndexerImpl-work -parent $(task.task_id)',
+		       maxFailures => "20",
+		       transitions => {"ANYFAIL" => '__ERROR__',
+				       "ALLSUCCESS" => 'run'},
+		       chain => { a => [{n => "work",
+					 c => "maintainSwishIndex.pl",
+					 t => __SUCCEEDED__,},],},},],};
+
+# $module{fail} = {a => [{n => fail,
+# 			c => "sleep 60",
+# 			t => __SUCCEEDED__,},],};
+
+
+$module{fullrebuild} = {a => [{n => fullrebuild,
+			       p => 1,
+			       t => '__SUCCEEDED__',
+			       c => 'createTask.pl -ta SwisheIndexerImpl-fullrebuild -parent $(task.task_id)',
+			       maxFailures => "20",
+			       transitions => {"ANYFAIL" => '__FAILED__',
+					       "ALLSUCCESS" => 'fullrebuild'},
+			       chain => { a => [{n => "fullrebuild",
+						 c => "maintainSwishIndex.pl -doFull -debug",
+						 t => __SUCCEEDED__,},],},},],};
+
+:>
+
+<tasks>
+<:
+    for $m (values %module) {
+        print moduleHelpers::childTasks(%$m);
+    }
+:>
+</tasks>
+
+<actions>
+<:
+    for my $m (values %module) {
+        print moduleHelpers::chainActions(%$m);
+    }
+:>
+</actions>
+
+<!-- end module.xml for SwisheIndexerImpl -->
+
+

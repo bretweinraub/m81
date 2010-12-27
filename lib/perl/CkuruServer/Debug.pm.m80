@@ -1,0 +1,94 @@
+<: #-*- perl -*-
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "CkuruServer::Debug",
+			           isa => 'CkuruServer::Base',
+                                   include => [FileHandle],
+                                   example =>
+q[
+    my $CkuruServer::Debug = $CkuruServer::Debug->new();   # stub example .... expand
+],
+				   description => 'CkuruServer::Debug description; stub description please expand');
+
+$po->setMembers([
+		 {name => "echo",
+		  description => "when writing to a file, setting  this  variable also causes the debug message to go to stdout"},
+                 {name => "logDir", 
+		  default => ".",
+		  description => "Directory to hold the CKURUSERVER log"},
+                 {name => "logName",
+		  required => 1,
+                  description => "Log name"},
+                 {name => "logFH",
+		  ref => "FileHandle",
+                  description => "Filehandle of the log file"},
+                 {name => "level",
+		  required => 1, 
+                  description => "Assigned log level"},
+                 {name => "prefix",
+                  description => "if set log messages are prefixed with this"},
+]); 
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+
+    if ($this->{logDir}) {
+	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
+	my $thisMonth = sprintf ("%4.4d%2.2d",$year+1900,$mon+1);
+	
+	my $newFile = "$this->{logDir}/$this->{logName}.$thisMonth.log";
+	system ("mkdir -p $this->{logDir}") && confess "failed to create $this->{logDir}, check your -logDir setting or system permissions.";
+
+	chmod 0644, $newFile;
+	$this->{logFH} = FileHandle->new();
+	$this->{logFH}->autoflush(1);
+	$this->{logFH}->open (">> $newFile") or 
+	    die "cannot open log file $newFile";
+    }
+}
+
+sub debugCmd {
+    my ($this, $level, $cmd) = @_;
+    eval ($cmd) 
+	if ($level <= $this->getLevel());
+}
+
+sub debug {
+    my $this = shift;
+    
+    my ($level, $data, $task_id) = @_;
+
+    if ($level =~ m/$this->{level}/ || $level <= $this->{level}) {
+        my ($caller) = (caller(1))[3];
+        my ($line) = (caller(1))[2];
+        $caller = "[$caller:$line]" if $caller;
+
+	my $save = $\;
+	$\ = "\n";
+	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
+	my $now = sprintf ("%2.2d/%2.2d/%02d-%2.2d:%2.2d:%2.2d",$mon+1,$mday,$year+1900,$hour,$min,$sec);
+	my $logMsg = "";
+	$logMsg .= $this->{'prefix'} if defined $this->{'prefix'};
+	$logMsg .= "$now($$) $caller: $data";
+	if ($this->{logFH}) {
+	    my $fh = $this->{logFH};
+	    print $fh $logMsg;
+	    print $logMsg if $this->{echo};
+	} else {
+	    print $logMsg;
+	}
+	if ($task_id) {
+	    my $task = $task::allTasks{$task_id};
+	    if ($task && $task->getProperty('taskLogFH')) {
+		my $fh = $task->getProperty('taskLogFH');
+		print $fh $logMsg;
+	    }
+	}
+	$\ = $save;
+    }
+}
+
+1;

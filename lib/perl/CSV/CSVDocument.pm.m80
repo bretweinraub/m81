@@ -1,0 +1,759 @@
+<: #-*- perl -*-
+
+# $m80path = [{command => "embedperl" }];
+    use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "CSV::CSVDocument",
+			           isa => '',
+                                   include => [FileHandle],
+                                   example => 
+				   q[
+
+    my $CSVDocument = new CSV::CSVDocument(filename => $file, debug => $debug, mergeText => '\r\n');
+    $CSVDocument->parseFields();
+    $CSVDocument->parseLines();
+    my @lines = @{$CSVDocument->getLines()};
+
+				     ],
+				   description => 'A CSV Document');
+
+$po->setMembers([{name => 'headerLine',
+		  default => 1,
+		  description => 'the line number that the document header appears on',},
+		 {name => "filename", 
+		  type => "string", 
+		  required => 1,
+		  description => "Name of the document to parse",},
+		 {name => 'dbType',
+		  required => 't',
+		  default => "m80",
+		  description => 'When generating database objects, use this to determine the right syntax'},
+		 {name => 'aggressive',
+		  description => 'aggressively shorten DB field names'},
+                 {name => "fieldSeparator", 
+		  type => "string", 
+		  required => 1,
+		  default => ",",
+		  description => "field separator character(s)"},
+                 {name => "fh", 
+		  description => "Name of the document to parse"},
+		 {name => "maxVarCharLength",
+		  description => 'maximum length of a variable length character string',
+		  default => 4000}, 
+                 {name => "fields", 
+                  type => 'ARRAY',
+		  description => "array of field names"},
+		 {name => "DBFields", 
+                  type => 'HASH',
+		  description => "array of field names converted to valid fields for a database",},
+		 {name => "DBDataTypes", 
+                  type => 'HASH',
+		  description => "array of db type names converted to valid fields for a database",},
+		 {name => "lines", 
+                  type => 'ARRAY',
+		  description => "array of parsed lines"},
+		 {name => "bigTextFields", 
+                  type => 'ARRAY',
+		  description => "array of all big text (CLOB maybe) fields"},
+     	         {name => 'mergeText' ,
+		  description => 'data that if found at the end of line, the line is considered run on and will be merged with the next line' ,},]); 
+
+:>
+<:= $po->dump(); :>
+
+################################################################################
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do {
+	my $fh = new FileHandle;
+	Confess "Failed to open " . $this->getFilename() 
+	    unless $fh->open ("< " . $this->getFilename());
+	$this->setFh($fh);
+    };
+}
+
+################################################################################
+
+sub nextLine {
+<:= $po->contract('nextLine' => {description => 'return the next line from the file handle',
+				 getopts => [{name => 'chomp' ,
+					      description => 'chomp the next line' ,},
+					     {name => 'mergeText' ,
+					      description => 'data that if found at the end of line, the line is considered run on and will be merged with the next line' ,},]}); :>
+    do {
+	my $fh = $this->getFh();
+	my $_finished;                                                          # set to 1 when we are done reading data
+	my $fulline;                                                            # all the data read
+	my $numDQs = 0;                                                         # track the number of double quoutes read
+	while (not $_finished) {
+	    my $line = <$fh>;
+	    $fulline .= $line;
+	    # look for run on lines due to open double quoutes;
+	    my $dqtest = $line;
+	    $dqtest =~ s/[^\"]//g;
+	    $numDQs += length($dqtest);
+	    $this->debugPrint(2, "found " . length($dqtest) . " \"\'s in line; total is $numDQs");
+	    if (($numDQs % 2) > 0) {
+		$this->debugPrint(2, "continuing to read input due to run-on line");
+	    } elsif ($mergeText) {
+		if ($line =~ /$mergeText$/) {
+		    $this->debugPrint(2, "continuing to read input due to matched merge text");
+		} else {
+		    $_finished = 't';
+		}
+	    } else {
+		$_finished = 't';
+	    }
+	}
+	$this->debugPrint(2, "loaded line $fulline");	
+	chomp($fulline) if $chomp;
+	$fulline;						    
+    };
+}
+
+################################################################################
+
+sub _splitData {
+   <:= $po->contract("_splitData" => {description => 'takes a line of data and splits it into array according to the defined field separator character',
+				      getopts => [{name => 'data' ,
+						   required => 't',
+						   description => 'data to process' ,},
+						  ]}); :>
+    do {
+
+	my $fieldSeparator = $this->getFieldSeparator();
+
+        ################################################################################
+	#
+	# Ignore commas between ",s - this is a pain in the ass.  Basically our strategy is move through the string one 
+	# character at a time.  If we see a ",", then we convert this to another string (__damnit__).  Then after we split
+	# the data along the separator character, we can convert the magic string back into the separator character.
+	#
+	################################################################################
+
+	my @chars = unpack "(a)*", $data;                                       # unpack is strange - see the man page
+	my $newstring;                                                          # build this as we move through the line
+	my $foundDQ;                                                            # found double quoute
+
+	my @commaFields;                                                        # keep track of every field that needs to be converted back
+	my $ndx = 0;                                                            # increment every time we see a comma.
+
+	foreach my $char (@chars) {
+	    if ($foundDQ) {
+		if ($char =~ /$fieldSeparator/) {
+		    $newstring .= "__DAMNIT__";                                 # found the field sep. between double quoutes.
+		    push (@commaFields, $ndx);                                  # keep track of the found field index
+		} else {
+		    if ($char =~ /\"/) {
+			undef $foundDQ;
+		    } else {
+			$newstring .= $char;
+		    }
+		}
+	    } else {
+		if ($char =~ /\"/) {
+		    $foundDQ = 1;
+		} elsif ($char =~ /$fieldSeparator/) {
+		    $ndx++;
+		}
+		$newstring .= $char unless $char =~ /\"/;
+	    }
+	}
+
+	$newstring .= ",DUMMYTEXT";
+
+	################################################################################
+	#
+	# Do the Splitting
+	#
+	################################################################################
+	
+	$this->debugPrint (3,"using field separator of $fieldSeparator to split string $newstring");
+
+	my @fields = split (/$fieldSeparator/, $newstring);
+	
+	################################################################################
+	#
+	# Now that we've split the fields, we convert our magic string back to a comma
+	#
+	################################################################################
+
+	map { $fields[$_] =~ s/__DAMNIT__/$fieldSeparator/g; } (@commaFields);
+
+	$this->debugPrint (3,Dumper(@fields));
+	$this->debugPrint (2,$#fields);
+
+	\@fields;
+    };						  
+}
+
+################################################################################
+
+sub parseFields {
+<:= $po->contract("parseFields" => {description => 'parse the first line of a CSV document and build an array of field names',
+				    vars => [headerLine],},); :>
+
+    do {
+	$this->nextLine while --$headerLine > 0;
+
+	my @fields = @{$this->_splitData(data => $this->nextLine(chomp => 't'))};
+
+	$this->debugPrint(2, "Field names are " . Dumper(@fields));
+
+	# Make sure field names are unique
+
+	my %fieldNames = ();                                                    # unique hash of field names
+
+	$this->debugPrint(1, "Number of fields is  " . ($#fields - 1));
+	for (my $i = 0 ; $i < $#fields ; $i++) {
+	    my $field = $fields[$i];
+	    $this->debugPrint(2, "looking for duplicates of field $field");
+	    if ($fieldNames{$field}) {                                          # duplicate -> generate a new field.
+		$this->debugPrint(1, "looks like $field is duplicated");
+		$fields[$i] .= "_" . ++$fieldNames{$field};
+	    } else {
+		$fieldNames{$field} = 1;
+	    }
+	}
+	$this->setFields(\@fields);
+    }
+}
+
+################################################################################
+
+sub _parseLine {
+    <:= $po->contract("_parseLine" => {description => 'read a line from the input.  Build a hash of the data based on the parsed fields.',},); :>
+    do {
+	my $line = $this->nextLine(mergeText => $this->getMergeText(), chomp => 't');
+	$this->debugPrint(2, "parsing line $line");
+	if ($line) {
+	    my %hash = ();
+	    my @fields = @{$this->getFields()};
+	    my @data = @{$this->_splitData(data => $line)};
+	    my $ndx = 0;                                                            # array index into the data 
+
+	    $this->debugPrint(1, "found " . $#data . " fields out of " . $#fields);
+	    foreach my $field (@fields) {
+		$hash{$field} = $data[$ndx++]
+		    unless $field =~ /DUMMYTEXT/;
+	    }
+	    $hash{___original_data___} = $line;
+	    $hash{___internal_badata___} = "found " . $#data . " fields out of " . $#fields
+		if ($#data != $#fields);                                        # mark this row bad since the number of fields read doesn't match
+	    return \%hash;
+	} 
+	return;
+    };
+}
+
+################################################################################
+
+sub parseLines {
+    <:= $po->contract("parseLines" => {description => 'read each line from the input.  Build a hash of the data based on the parsed fields for each line.',},); :>
+    do {
+	my @parsedLines;
+	
+	while (my $parsedLine = $this->_parseLine()) {
+	    push(@parsedLines,$parsedLine);
+	}
+
+	$this->setLines(\@parsedLines);
+    };
+}
+
+################################################################################
+
+sub initialize {
+   <:= $po->contract('initialize' => {description => 'Loads the fields and lines from a CSV document if not done already.'}); :>
+    do {
+	$this->parseFields() unless $this->getFields();
+	$this->parseLines() unless $this->getLines();
+	$this->_buildDBFieldNames() unless $this->getDBFields();
+    };
+}
+
+################################################################################
+
+sub DBFieldName {
+   <:= $po->contract('DBFieldName' => {description => 'Convert a csv column name into a database field name',
+				       getopts => [{name => 'field' ,
+						    required => 't',
+						    description => 'field to convert',},]}); :>
+    do {
+	my $save=$field;
+	$field =~ s/\&/and/g;
+	$field =~ s/[\s:\-\(\)\.\/]/_/g;
+	$field =~ s/\#/no/g;
+	$field =~ s/%/pct/g;
+	$field =~ s/\'//g;
+	$field =~ s/\;//g;
+	$field =~ s/_+/_/g;
+	$field =~ s/,/_/g;
+	$field =~ s/^_//g;
+	$field =~ s/\[//g;
+	$field =~ s/\]//g;
+	$field =~ s/^Number$/Number_/;
+	if ($this->getAggressive()) {
+	    $field =~ s/(address)_([12])/$1$2/gi;	    
+	    $field =~ s/_\d+$//g;	    
+	    $field =~ s/address/addr/gi;	    
+	}
+	$field = substr($field, 0, 30);
+	$this->debugPrint(2, "$save converted to field name $field");
+	$field;
+    };
+}
+
+
+################################################################################
+
+sub __DBdependentText {
+   <:= $po->contract('__DBdependentText' => {description => 'returns the correct data type for a specific database type based on the input',
+				      getopts => [
+						  {name => 'type' ,
+						   required => 't',
+						   description => 'the data type to convert to the db dependent data type',},
+						  {name => 'modifier1' ,
+						   description => 'modifier 1',},
+						  {name => 'modifier2' ,
+						   description => 'modifier 2',},
+						   ]}); :>
+    do {
+
+	my $dbType = $this->getDbType();
+	
+      SWITCH: {
+	  $dbType =~ /m80/ && do {
+	      if ($type =~ /date/i) {
+		  return "DATE";
+	      } elsif ($type =~ /^create/i) {
+		  return "createM80StandardTable(" . $modifier1 . ", (\n";
+	      } elsif ($type =~ /endcreate/i) {
+		  return ",
+                       ),
+                       (),,
+                       (INSTANTIATION_TABLE=true),
+                      )m4_dnl;\n\n";
+	      } elsif ($type =~ /^text/i) {
+		  Confess "for text fields you must specify 'modifier1 =>' in the call to __DBdependentText" unless defined $modifier1;
+		  return 'varcharType(' . $modifier1 . ')';
+	      } elsif ($type =~ /bigtext/i) {
+		  return 'CLOB';
+	      } elsif ($type =~ /number/i) {
+		  if (defined $modifier1) {
+		      if (defined $modifier2) {
+			  return 'number(' . $modifier1 . ','. $modifier2 .')';
+		      } else {
+			  return 'number(' . $modifier1 .')';
+		      }
+		  } else {
+		      return 'number';
+		  }
+	      } else {
+		  Confess "Unknown or implemented $type for db type $dbType";
+	      }
+	      last SWITCH;
+	  };
+	  Confess "database type of $dbType is not implemented :(";
+      };
+	
+    };
+}
+
+################################################################################
+
+sub deriveDataType {
+   <:= $po->contract('deriveDataType' => {description => 'For a parsed document, takes a field name as an argument.  Then inspects the data for this field and derives the correct data type for the field.   Generates the data type based on the $this->getDBType() value',
+				      getopts => [{name => 'field' ,
+						   required => 't',
+						   description => 'field name to investigate',},
+						  {name => 'dateFormat',
+						   default => "[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}",
+						   quotedefault => 't',
+						   description => 'Date format as a perl regular expression to look for within the data'},
+						  ]}); :>
+    do {
+	my $ret;
+	$this->debugPrint(2, "Processing field $field");
+	my @lines = @{$this->getLines()};
+
+	my ($ndx, $numDateStrings, $numNumerical, $numBlank, $maxLength) = (0,0,0,0,0);
+	my $numericalRegex = '^([0-9]+(.[0-9]+|)$)';
+
+	foreach my $line (@lines) {
+	    $ndx++;
+	    my $data = $line->{$field};
+	    my $len = length($data);
+
+	    $maxLength = (($len > $maxLength) ? $len : $maxLength);
+	    
+	    if ($data =~ /$dateFormat/)  {
+		$numDateStrings++;
+	    } elsif ($data =~ /$numericalRegex/) {
+		$numNumerical++;
+	    } elsif ($data =~ /^\s+$/) {
+		$numBlank++;
+	    }
+	    $this->debugPrint (2, "field $field ($ndx,$numDateStrings,$numNumerical,$numBlank) is : " . $line->{$field});
+	}
+	my $type;
+	if (($numDateStrings + $numBlank) == $ndx) {
+	    $type = $this->__DBdependentText(type => 'date');
+	} elsif (($numNumerical + $numBlank) == $ndx) {
+	    $type = $this->__DBdependentText(type => 'number');
+	} elsif ($maxLength > $this->getMaxVarCharLength()) { 
+	    $type = $this->__DBdependentText(type => 'bigtext'),
+	} else {
+	    $type = $this->__DBdependentText(type => 'text',
+					     modifier1 => ($maxLength < 1 ? 1 : $maxLength));
+	}
+	
+	$ret .= "        " . $this->DBFieldName(field => $field);
+	$ret .= "\t$type";
+	$ret;
+    };
+}
+
+
+################################################################################
+
+sub __deriveDataType {
+   <:= $po->contract('__deriveDataType' => {description => 'Derive the textual definition of the data type of a field',
+				      getopts => [{name => 'field' ,
+						   required => 't',
+						   description => 'field name to investigate',},
+						  {name => 'dateFormat',
+						   default => "[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}",
+						   quotedefault => 't',
+						   description => 'Date format as a perl regular expression to look for within the data'},
+						   ]}); :>
+    do {
+	$this->debugPrint(2, "Processing field $field");
+	my @lines = @{$this->getLines()};
+	my %DBDataTypes;
+	my @bigTextFields;
+
+	if ($this->getBigTextFields()) {
+	    @bigTextFields = @{$this->getBigTextFields()};
+	} else {
+	    @bigTextFields = ();
+	}
+
+	if ($this->getDBDataTypes()) {
+	    %DBDataTypes = %{$this->getDBDataTypes()};
+	} else {
+	    %DBDataTypes = ();
+	}
+
+	my ($ndx, $numDateStrings, $numNumerical, $numBlank, $maxLength) = (0,0,0,0,0);
+	my $numericalRegex = '^([0-9]+(.[0-9]+|)$)';
+
+	foreach my $line (@lines) {
+	    $ndx++;
+	    my $data = $line->{$field};
+	    my $len = length($data);
+
+	    $maxLength = (($len > $maxLength) ? $len : $maxLength);
+	    
+	    if ($data =~ /$dateFormat/)  {
+		$numDateStrings++;
+	    } elsif ($data =~ /$numericalRegex/) {
+		$numNumerical++;
+	    } elsif ($data =~ /^\s+$/) {
+		$numBlank++;
+	    }
+	    $this->debugPrint (2, "field $field ($ndx,$numDateStrings,$numNumerical,$numBlank) is : " . $line->{$field});
+	}
+	my $type;
+	if (($numDateStrings + $numBlank) == $ndx) {
+	    $type = 'date';
+	} elsif (($numNumerical + $numBlank) == $ndx) {
+	    $type = 'number';
+	} elsif ($maxLength > $this->getMaxVarCharLength()) { 
+	    $type = 'bigtext';
+	    push (@bigTextFields, $field);
+	} else {
+	    $type = 'text';
+	}
+	
+	$DBDataTypes{$field} = $type;
+	$this->setDBDataTypes(\%DBDataTypes);
+	$this->setBigTextFields(\@bigTextFields);
+    };
+}
+
+
+################################################################################
+
+sub _deriveDataTypes {
+   <:= $po->contract('_deriveDataTypes' => {description => 'Loops over the fields in the CSV document and derives the correct db data type.',
+					    getopts => [
+							#{name => 'data' ,
+							# required => 't',
+							# description => 'data to process',},
+							]}); :>
+    do {
+	$this->initialize();
+	my @fields = @{$this->getFields()};
+
+	foreach my $field (@fields) {
+	    $this->__deriveDataType(field => $field)
+		    unless $field =~ /DUMMYTEXT/;
+	}
+	$this->debugPrint(2, "datatype definitions are " . Dumper($this->getDBDataTypes()));
+    };
+}
+
+
+
+################################################################################
+
+sub _buildDBFieldNames {
+   <:= $po->contract('_buildDBFieldNames' => {description => 'scans threw the parsed fields, and builds a DB safe field name.  Handles duplicates as well.',
+				      getopts => [ #{name => 'data' ,
+						   # required => 't',
+						   # description => 'data to process',},
+						   ]}); :>
+    do {
+	my @fields = @{$this->getFields()};
+	my %DBFields = ();
+
+	foreach my $field (@fields) {
+	    $DBFields{$field} = $this->DBFieldName(field => $field)
+		unless $field =~ /DUMMYTEXT/;
+	}
+
+	$this->setDBFields(\%DBFields);
+    };
+}
+
+################################################################################
+
+sub generateSchema {
+    <:= $po->contract('generateSchema' => {description => 'Generate a schema definition based on the parsed data from a CSV file.',
+					   getopts => [{name => 'tableName',
+							required => 't',
+							description => 'Name of table to generate'},
+						       {name => 'dateFormat',
+							default => "[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}",
+							quotedefault => 't',
+							description => 'Date format as a perl regular expression to look for within the data'},],}); :>
+    do {
+	$this->initialize();
+	my @fields = @{$this->getFields()};
+
+	$this->debugPrint(1, "table name is $tableName");
+	my $ret = $this->__DBdependentText(type => 'create',
+					   modifier1 => $tableName);
+	my $fieldNum = 0;                                                       # track our field number
+
+	foreach my $field (@fields) {
+	    unless ($field =~ /DUMMYTEXT/) {
+		$ret .= ",\n" if $fieldNum++;
+		$ret .= $this->deriveDataType(field => $field, dateFormat => $dateFormat);
+	    }
+	}
+
+	$ret .= $this->__DBdependentText(type => 'endcreate');
+	print $ret;
+    };
+}
+
+
+################################################################################
+
+sub formatField {
+   <:= $po->contract('formatField' => {description => 'Format a field for database update that correctly manages nulls',
+				      getopts => [
+						  {name => 'field' ,
+						   required => 't',
+						   description => 'field name',},
+						  {name => 'dbType' ,
+						   required => 't',
+						   default => 'oracle',
+						   description => 'type of database being loaded',},
+						  {name => 'line' ,
+						   required => 't',
+						   description => 'line to process',},
+						  {name => 'bind' ,
+						   description => 'if set, return a bind variable placeholder as opposed to the actual text',},
+						  ]}); :>
+    do {
+	my %DBDataTypes = %{$this->getDBDataTypes()};
+	my $type = $DBDataTypes{$field};
+
+	return "null" unless exists $line->{$field};
+      SWITCH: {
+	  $type =~ /date/ && do {
+	      return "null" unless $line->{$field};
+	      return "null" if $line->{$field} =~ '0000-00-00 00:00:00';
+	      return "to_date('$line->{$field}','YYYY-MM-DD HH24:MI:SS')";
+	      last SWITCH;
+	  };
+
+	  $type =~ /bigtext/ && do {
+	      if ($bind) {
+		  return '?';
+	      } else {
+		  return "null" unless $line->{$field};
+		  my $tmp = $line->{$field};
+		  $tmp =~ s/\'/\'\'/g;
+		  return "'$tmp'";
+	      }
+	  };
+	  $type =~ /text/ && do {
+	      return "null" unless $line->{$field};
+	      my $tmp = $line->{$field};
+	      $tmp =~ s/\'/\'\'/g;
+	      return "'$tmp'";
+	      last SWITCH;
+	  };
+	  return $line->{$field};
+      };
+	
+    };
+}
+
+
+
+
+################################################################################
+
+sub loadDB {
+   <:= $po->contract('loadDB' => {description => 'Load a database with the data from this CSV document.',
+				      getopts => [
+						  {name => 'dbh' ,
+						   ref => 'DBI::db',
+						   required => 't',
+						   description => 'DBI handle for the database',},
+						  {name => 'tableName' ,
+						   required => 't',
+						   description => 'table name',},
+						  {name => 'purge' ,
+						   description => 'purge the table before loading it',},
+						  {name => 'dbType' ,
+						   required => 't',
+						   description => 'database type for formating SQL strings',},
+						   ]}); :>
+    do {
+	$this->initialize();
+	$this->_deriveDataTypes() unless $this->getDBDataTypes();
+
+	open (ERRORS, "> $tableName.err");
+
+	if ($purge) {
+	    $dbh->prepare("delete from $tableName")->execute()
+		or Confess "ERROR: $DBI::errstr";
+	}
+	
+	my @lines = @{$this->getLines()};	
+	my @fields = @{$this->getFields()};
+	my %DBFields = %{$this->getDBFields()};
+	my %DBDataTypes = %{$this->getDBDataTypes()};
+	my @bigTextFields = @{$this->getBigTextFields()};
+
+	my $fieldText = "insert into $tableName (";
+	my $ndx = 0;
+
+	foreach my $field (@fields) {
+	    $fieldText .= ($ndx++ ? "," : "") . "\n\t" . $DBFields{$field}
+	    unless $field =~ /DUMMYTEXT/;
+	}
+	$fieldText .= "\n) values (";
+	my $lineno =0;
+	my $numloaded  = 0;
+	my $numrejected = 0;
+
+	foreach my $line (@lines) {
+	    $this->debugPrint(3, Dumper($line));
+
+	    if ($line->{___internal_badata___}) {
+		$numrejected += 
+		    $this->rejectLine(lineno => $lineno++,
+				      data => $line,
+				      error => $line->{___internal_badata___});
+		next;
+	    }
+
+	    my $ret = $fieldText;
+	    $ndx = 0;
+	    foreach my $field (@fields) {
+		$ret .= ($ndx++ ? "," : "") . "\n\t" . $this->formatField(field => $field, 
+									  line => $line,
+									  bind => 't',
+									  dbType => $dbType)
+		    unless $field =~ /DUMMYTEXT/;
+	    }
+	    $ret .= "\n)";
+	    
+	    $this->debugPrint(2, "$ret");
+	    eval {
+		my $stmt = $dbh->prepare($ret);
+
+		my $bind_no = 1;
+		foreach my $bigtextfield (@bigTextFields) {
+		    my $val = $this->formatField(field => $bigtextfield,
+						 line => $line,
+						 dbType => $dbType);
+		    $this->debugPrint (2, "binding field $bigtextfield with value $val");
+		    $stmt->bind_param ($bind_no, $val);
+		}
+
+		$stmt->execute()
+		    or Confess "ERROR: $DBI::errstr";
+	    };
+	    if ($@) {
+		my $err=$@;
+		$numrejected += 
+		    $this->rejectLine(lineno => $lineno++,
+				      data => $line,
+				      sql => $ret,
+				      error => $err);
+	    } else {
+		$this->debugPrint(1, "loaded line ". $lineno++);
+		$numloaded++;
+	    }
+
+	}
+	close (ERROR);
+	$this->debugPrint(0, "loaded $numloaded lines, rejected $numrejected" . ($numrejected ? " ; see $tableName.err for details " : ""));
+	return $numrejected;
+    };
+}
+
+
+################################################################################
+
+sub rejectLine {
+   <:= $po->contract('rejectLine' => {description => 'reject the line specified',
+				      getopts => [
+				                   {name => 'lineno' ,
+						    required => 't',
+						    description => 'line number of failure',},
+				                   {name => 'data' ,
+						    required => 't',
+						    description => 'failed data ',},
+				                   {name => 'sql' ,
+						    description => 'sql statement (if any)',},
+				                   {name => 'error' ,
+						    required => 't',
+						    description => 'error text',},
+						   ]}); :>
+    do {
+	$this->debugPrint(1, "rejected line ". $lineno);
+	my @fields = @{$this->getFields()};
+	print ERRORS "################################################################################\n";
+	print ERRORS "Line Number: $lineno\n";
+	print ERRORS "DATA: " . Dumper ($data) . "\n";
+	print ERRORS "SQL: $sql\n";
+	print ERRORS "ERROR: $error\n";
+	print ERRORS "FIELDS:\n";
+	foreach my $field (@fields) {
+	    print ERRORS "$field => ". $data->{$field} . "\n";
+	}
+	1;
+    };
+}
+
+

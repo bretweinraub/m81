@@ -1,0 +1,49 @@
+<: #-*- perl -*- # $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Metadata::Object::ETLDescriptor",
+			           isa => 'Metadata::Object',
+                                   include => [],
+                                   example =>
+q[
+    my $ETLDescriptor = $ETLDescriptor->new();   # stub example .... expand
+],
+				   description => 'ETLDescriptor description; stub description please expand');
+
+$po->setMembers([{name => "sourceRD",
+		  ref => "Metadata::Object::ETLResource",
+		  description => "ETLResource for source resource",
+		  required => 1,},
+		 {name => "columnNameTranslators",
+		  ref => ARRAY,
+		  description => "array of Metadata::Object::ColumnNameTranslator objects"},
+		 {name => "targetRD",
+		  ref => "Metadata::Object::ETLResource",
+		  description => "ETLResource for target resource",
+		  required => 1,},
+		 {name => "transformation",
+		  required => t,
+		  description => "transformation type",},
+		 {name => "window",
+		  description => "window description",},
+		 {name => "crawlConfig",
+		  description => "crawler config",},
+		 {name => "typeTwoColumns",
+		  description => "An list of names of columns from the source table that should be managed as type 2 changes"},
+		]);
+print $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do {
+	my $sourceRD = $this->getSourceRD();
+
+	Confess "natural key must be defined when using the replicate or dimensional transformation"
+	    if ($this->getTransformation() =~ /(replicate|dimensional)/i)
+	    and not $sourceRD->getNaturalKey();
+
+	Warn "typeTwoColumns only of interest for transformation type of dimensional"
+	    if $this->getTransformation !~ /dimensional/i
+	    and $this->getTypeTwoColumns();
+    };
+}

@@ -1,0 +1,86 @@
+<: #-*- perl -*- # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'svnStat.pl' , 
+                                   description => 'description for svnStat',
+                                   include => [],
+                                   getopts => [
+  					       { tag => 'maybe',
+						 description => 'only show maybe matches',},
+				       { tag => 'commands',
+					 description => 'generate svn commands',},
+				       { tag => 'exec',
+					 description => 'exec svn commands',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+$commands = 1 if $exec;
+
+do {
+    use strict;
+
+    my @lines = `svn stat`;
+
+    my (@probablyNot, @maybe);
+
+    debugPrint(0, @lines);
+    foreach my $line (@lines) {
+	my ($char, $file) = split (/\s+/,$line);
+	debugPrint(1, "$char : $file");
+      SWITCH: {
+	  $char =~ /\?/ && do {
+	      if ($file =~ /(.(out|log|tmp|err)$)/)  {
+		  push (@probablyNot, $file);
+		  debugPrint(0, "ignoring $file since it appears to be a temporary file");
+		  last SWITCH;
+	      }		  
+
+	      if ($file =~ /~/)  {
+		  push (@probablyNot, $file);
+		  debugPrint(0, "ignoring $file since it appears to be an emacs backup file");
+		  last SWITCH;
+	      }		  
+	      my $m80file = "$file" . ".m80";
+	      if (-f $m80file) {
+		  push (@probablyNot, $file);
+		  debugPrint(0, "ignoring $file since we found $m80file");
+		  last SWITCH;
+	      }
+	      my $m4file = "$file" . ".m4";
+	      if (-f $m4file) {
+		  push (@probablyNot, $file);
+		  debugPrint(0, "ignoring $file since we found $m4file");
+		  last SWITCH;
+	      }
+	      my $shm4file = "$file" . "sh..m4";
+	      if (-f $shm4file) {
+		  push (@probablyNot, $file);
+		  debugPrint(0, "ignoring $file since we found $shm4file");
+		  last SWITCH;
+	      }
+	      push (@maybe, $file);
+	      last  SWITCH;
+	  };
+	};
+	
+    }
+
+    unless  ($maybe) {
+	print "######## PROBABLY NOT  ###########\n";
+	map { print "$_\n";} (@probablyNot);
+    }
+    print "######## MAYBE  ###########\n";
+    
+    map { 
+	my $maybe_str = ($commands ? "svn add $_\n" : "$_\n");
+	print $maybe_str;
+	docmdi $maybe_str if $exec;
+    } (@maybe);
+    
+
+	
+};
+ 
+cleanup 0; 

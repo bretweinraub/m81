@@ -1,0 +1,4 @@
+#LWP-Cookies-1.0
+Set-Cookie3: ck_login_id_20=1; path="/sugarcrm"; domain=localhost.local; expires="2008-08-02 22:18:56Z"; version=0
+Set-Cookie3: ck_login_language_20=en_us; path="/sugarcrm"; domain=localhost.local; expires="2008-08-02 22:18:56Z"; version=0
+Set-Cookie3: ck_login_theme_20=Sugar; path="/sugarcrm"; domain=localhost.local; expires="2008-08-02 22:18:56Z"; version=0

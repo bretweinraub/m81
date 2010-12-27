@@ -1,0 +1,90 @@
+<@ # -*-perl-*-
+# $m80path = [{ command => "embedperl -embedderChar @" }]
+    use Env qw(name);
+    $name ||= 'taskCleanupScript';
+@><: #-*- perl -*-
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => '<@=$name@>.pl' , 
+                                   description => 'Given a task id, cleanup some boxes on that infra.',
+                                   include => ['MetaDataObject',
+                                               'FunctionalProgramming',
+                                               'dbutil'],
+                                   isRemoteScript => 't',
+                                   getopts => [
+ 					       { tag => 'task_id:s',
+                                                  variable => '$task_id',
+                                                  required => 't',
+                                                  default => '$ENV{task_id}',
+                                                  description => 'The task_id that should be used for deriving what servers and paths need to be cleaned up',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+print_usage( "set -task_id" ) unless $task_id;
+
+#
+# the $object_path_deriver is a closed sub. It is useful when you want to
+# derive some internal variable information from a known object. I.e. If you use
+# getObjects to get the name of an object and you want to get the value of a
+# variable in the current memory space where the name of the variable is say ...
+#  $<$object->name>_XXX, then you have to do something like eval(eval()). That
+# is a hard one to figure out, so this is a light wrapper around it.
+#
+# Use it like:
+#     my $domain_home_pather = $object_path_deriver->('_domainhome_unix');
+#     my $path = $domain_home_pather->($host->{name});
+#     
+my $object_path_deriver = sub { 
+    my $prefix = shift; 
+    return sub { 
+        my $postfix = shift; 
+        return eval('$' . eval(tag2shell($postfix)) . tag2shell($prefix));
+    };
+};
+
+
+#
+# The following block makes this script run under the context of some task in
+# the statemachine. It is true to the statemachine export/mapper functionality
+# because it uses the dumpContext.pl script to generate the StateMachine env
+# for a particular task. It then sets global variables equal to the names/values
+# that were generated from dumpContext.pl. This effectively simulates running
+# this script in either the 1) StateMachine or 2) DebugChassis. I.e. if you need
+# a variable (for example $user) and you know that it is set in dumpContext.pl,
+# then you can reference it as $user in this script.
+# 
+$ENV{QUIET} = 'true';
+map { eval "\$$_" } grep { s/^export\s// } `m80 --execute dumpContext.pl -task $task_id`;
+
+
+#
+# Load the @allObjects array with all the test definition.
+# 
+require 'LoadCollections.pl';
+
+
+# ###############################################################################
+#
+# Put Your Code Here.
+#
+# At this point, the environment is all configured and the tools should be available
+# for you to start rm -rf'ing directories.
+#
+# Example (delete the domainhome off the wls servers):
+#   map {
+#       my $wls = $_;
+#       $user = $wls->prop('host')->prop('user');
+#       $host = $wls->prop('host')->prop('host');
+#       my $domain_home_pather = $object_path_deriver->('_domainhome_unix');
+#          
+#       my $command = "rm -rf " . $domain_home_pather->($host);
+#       debugPrint 1, "$user\@$host: $command";
+#       remote_docmdi $command unless $debug;
+#
+#   } getObjects( '^wls$', @allObjects );
+
+    
+cleanup 0; # "

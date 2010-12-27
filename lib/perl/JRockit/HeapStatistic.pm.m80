@@ -1,0 +1,59 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "JRockit::HeapStatistic",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+    my $HeapStatistic = $HeapStatistic->new();   # stub example .... expand
+],
+				   description => 'A detailed heap statistic line from the JRockit heap_diagnostic utility of the form
+
+26.7% 32736k   301486   +121k [C
+ 7.3% 8969k   382705     +6k java/lang/String
+ 6.7% 8265k    28946   +101k [B
+
+
+ ');
+
+$po->setMembers([
+                 {name => "percentage", 
+		  type => "string", 
+		  required => 1,
+		  description => "percentage of used heap occupied by this class "},
+                 {name => "totalSize", 
+		  type => "string", 
+		  required => 1,
+		  description => "total heap size occupied by this class "},
+                 {name => "numInstances", 
+		  type => "string", 
+		  required => 1,
+		  description => "number of instances of this class "},
+                 {name => "delta", 
+		  type => "string", 
+		  required => 1,
+		  description => "change in total size allocated this class since last measurement "},
+                 {name => "name", 
+		  type => "string", 
+		  required => 1,
+		  description => "name of this class "},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+#sub method {
+# remove the spaces from the tag below
+#    < : = $po->contract('method' => {description => "method description"} ); :>
+#}
+	    
+

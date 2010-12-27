@@ -1,0 +1,67 @@
+<: #-*- perl -*-
+# $m80path = [{command => "embedperl" }];
+
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "M80Repository::DeployableBits",
+			           isa => 'M80Repository::Base',
+                                   include => [Utils::PerlTools],
+                                   example =>
+q[
+    my $M80Repository::DeployableBits = $M80Repository::DeployableBits->new();   # stub example .... expand
+],
+				   description => 'M80Repository::DeployableBits description; stub description please expand');
+
+$po->setMembers([
+    {name => "name", 
+     required => 1,
+     description => "Name of the deployable bits module"},
+    {name => "srcPath",
+     required => 1,
+     description => "Path to the source bits"},
+    {name => "srcHost",
+     description => "Host for the source bits ; if not set will default localhost"},
+    {name => "srcUser",
+     description => "Username on the srcHost; if not set the current user is assumed "},
+    {name => "destPath",
+     required => 1,
+     description => "Path to the destination bits"},
+    {name => "destHost",
+     description => "Host for the destination bits ; if not set will default localhost"},
+    {name => "destUser",
+     description => "Username on the destHost; if not set the current user is assumed"},
+    {name => "destGroup",
+     description => "Groupname on the destHost; if not set no manipulation is performed"},
+    {name => "preDepCmd",
+     description => "Run in the bundle srcDir before deployment ... defaults to \"make clean all\"",},
+    {name => "postDepCmd",
+     description => "Run in the bundle destPath after deployment",},
+    {name => "mosDescriptor",
+     description => "description of configurable mos commands to generate",}
+
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+
+################################################################################
+
+sub dump {
+   <:= $po->contract('dump' => {description => 'dump the output for the m80 repository',
+				      getopts => [
+				                   #{name => 'data' ,
+						   # required => 't',
+						   # description => 'data to process',},
+						   ]}); :>
+    do {
+	$this->SUPER::dump(@_) . "m80NewCustomModule([" . $this->getName() . "],((deploy," . $this->getSrcPath() . ",deploy.sh)))\n";
+    };
+}
+
+
+

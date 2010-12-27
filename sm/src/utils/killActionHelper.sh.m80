@@ -1,0 +1,32 @@
+<: # -*-sh-*-
+# $m80path = [{command => "embedperl.pl"}, {command => "m4", chmod => "+x" }];
+use shellHelpers;
+
+print shellHelpers::shellScript(getopts => "(p, -pid)");
+:>
+
+uname=$(uname)
+
+if [ $uname = "Linux" ]; then
+    _command=$(cat /proc/$pid/cmdline | cksum | awk '{print $1}')
+fi
+
+docmd sleep 1
+docmd kill -15 $pid
+docmd sleep 5
+
+_command_now=$(cat /proc/$pid/cmdline | cksum | awk '{print $1}')
+if [ -n "$_command" ]; then
+    if [ "$_command" != "$_command_now" ]; then
+	cleanup 0 exiting looks like SIGHUP did the trick
+    else
+	printmsg pid $pid is still hanging around after SIGHUP
+    fi
+else
+# stupid non linux box
+    printmsg bad os $uname .... must use the hammer on this boy
+fi
+
+docmdi kill -9 $pid
+cleanup 0
+

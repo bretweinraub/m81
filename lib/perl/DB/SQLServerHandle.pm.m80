@@ -1,0 +1,121 @@
+<: #-*- perl -*-
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "DB::SQLServerHandle",
+			           isa => 'DB::DBHandle',
+                                   include => [],
+                                   example =>
+q[
+    my $DB::SQLServerHandle = $DB::SQLServerHandle->new();   # stub example .... expand
+],
+				   description => 'DB::SQLServerHandle description; stub description please expand');
+
+$po->setMembers([{name => "database",
+		  description => "A SQL Server database to use"},
+		 {name => "interface",
+		  description => "An interface from $SYBASE/etc/freetds.conf"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do {
+	if ($this->getNamespace()) {
+	    $this->setInterface($ENV{$this->getNamespace() . "_interface"});
+	    $this->setUser($ENV{$this->getNamespace() . "_user"});
+	    $this->setPassword($ENV{$this->getNamespace() . "_password"});
+	    $this->setDatabase($ENV{$this->getNamespace() . "_database"});
+	}
+
+	Confess "required member variable interface not set" unless $this->getInterface();
+	Confess "required member variable database not set" unless $this->getDatabase();
+	$this->setConnectString("dbi:Sybase:server=" . $this->getInterface());
+	$this->connect();
+	$this->getDbh()->do("use " . $this->getDatabase());
+    };
+}
+
+sub getSmallDateFormat {
+   <:= $po->contract('getSmallDateFormat' => {description => 'for mysql DATE fields (no time), this is the default date format'}); :>
+    "Mon DD YYYY HH:MIAM";
+}
+
+
+sub DBIPrecisionToGenericPrecision {
+   <:= $po->contract('DBIPrecisionToGenericPrecision' => {description => 'SQL Server "Length" doesn\'t conform to the standard used by Oracle or Mysql.  This is the actual storage size.  So we need to convert this to the bounding used by oracle (which is the number of digits to store).  Fun!  DBHandle contains a default method that just returns the passed in length',
+							  getopts => [
+								      {name => 'data' ,
+								       required => 't',
+								       description => 'data to process',},
+								      ]}); :>
+    do {
+	# 2^8 = 256 =~ 3 digits
+	# 2^16 = 65536 =~ 5 digits
+	# 2^24 = 16777216 =~ 8 digits
+	# 2^32 = 4294967296 =~ 10 digits
+
+#	my $ret = (($data * (2.5) + .9));
+	my $ret = (($data * (2.5) + 1));  # the add 1 used to be ".9"; but this was failing in some instances.
+	$ret =~ s/\..+?//g;
+	$this->debugPrint (1, "calculating precision for length $data as $ret");
+	$ret;
+    };
+}
+
+=pod
+
+=head1 INSTALLATION NOTES
+
+=head2 freetds
+
+SQLServerHandle uses DBD::Sybase for its DBD driver.
+
+This requires the freetds package be installed on the box. 
+
+When installing freetds, we suggest that freetds be built as follows:
+
+./configure --prefix=/usr/local
+
+It is then required at runtime that the following variables be set:
+
+    export SYBASE=/usr/local
+    export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+
+or in the m80 repository:
+
+    define_variable(SYBASE,/usr/local)
+    append_variable(LD_LIBRARY_PATH,":/usr/local/lib")
+
+=head2 Editing the interfaces file
+
+To connect to a MS SQL database, this database needs to be described in an interface
+file.
+
+We recommend using the one in $SYBASE/freetds.conf ; although there are other options.  See
+the freetds documentation for more information.  
+
+=head3 Sample freetds.conf entry:
+
+Use tds version of 7.0 for ms sql.
+
+    [SolarWindsDev]
+        host = 127.0.0.1
+        port = 1433
+        tds version = 7.0
+
+=head2 Creating an m80 repository entry for a ms sql database
+
+In an m80 environment file:
+   
+  PLEASE NOTE YOU MUST USE '<' INSTEAD of '[' in this example .... don't ask ;)
+
+  [:  use M80Repository::SQLServer; :>
+  [:= M80Repository::SQLServer->new(name => "M80ObjectName",
+				    interface => "EntryFromFreeTDSFile",
+				    user => "SQLServerUser",
+				    database => "SQLServerDatabase",
+				    password => "SQLServerPassword")->dump; :>

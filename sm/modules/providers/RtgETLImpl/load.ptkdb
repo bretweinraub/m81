@@ -1,0 +1,16 @@
+$files = {
+           '_</home/bret/dev/m81/sm/modules/providers/RtgETLImpl/load.pl' => [
+                                                                               {
+                                                                                 'expr' => undef,
+                                                                                 'value' => '1',
+                                                                                 'text' => '		$monthTable->Import(data => $DataToLoad->getResults(),
+',
+                                                                                 'fname' => '/home/bret/dev/m81/sm/modules/providers/RtgETLImpl/load.pl',
+                                                                                 'type' => 'user',
+                                                                                 'line' => '267'
+                                                                               }
+                                                                             ]
+         };
+$expr_list = [];
+$eval_saved_text = undef;
+$main_win_geometry = '1255x996+0+6';

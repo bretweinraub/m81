@@ -1,0 +1,23 @@
+<: # -*-sh-*-
+use Helpers::shellHelpers; # $m80path = [{command => "embedperl"}, {command => "m4", chmod => "+x" }];
+print Helpers::shellHelpers::shellScript ( r => [required],
+                                           getopts => ); 
+:>
+
+extras=$(eval  echo $extras)
+
+docmdi tty
+
+#printmsg running ssh $extras -o StrictHostKeyChecking=no  -l $user $host
+printmsg running ssh $extras -l $user $host sleep 99999
+ssh $extras -l $user $host sleep 99999
+if [ $? -ne 0 ]; then
+    printmsg ssh failed with error code $?
+    exit 31 # special code spawns restart
+else
+    printmsg ssh exited with error code 0
+fi
+
+cleanup 0
+
+    

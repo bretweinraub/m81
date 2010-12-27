@@ -1,0 +1,41 @@
+<: #-*- perl -*- # $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Utils::PerlTools",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+    my $Utils::PerlTools = $Utils::PerlTools->new();   # stub example .... expand
+],
+				   description => 'Utils::PerlTools description; stub description please expand');
+
+$po->setMembers([]); 
+print $po->dump(); :>
+
+sub _new { <:= $po->dumpContract(method => "_new"); :> }
+
+no strict ;
+@ISA = qw(Exporter);
+@EXPORT = qw(ArrayRef);
+use strict ;
+
+=pod
+
+=head2 ArrayRef
+
+Takes the list of arguments passed, converts it to an array reference, and then returns the results.
+Very useful when you want to pass an array as a single variable, which allows for a cleaner code ...
+syntactic sugar if you will.
+
+$result = MySubWhereArgument1IsAnArrayRef (ArrayRef(1,2,3,4));
+
+The alternative would be
+
+my @_tempArray = (1,2,3,4);
+
+$result = MySubWhereArgument1IsAnArrayRef (\@_tempArray);
+
+=cut
+
+sub ArrayRef {my @arr = @_;\@arr}

@@ -1,0 +1,72 @@
+<: #-*- perl -*-
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new(name => 'cloneData.pl' , 
+				  description => '',
+				  include => [DB::DBHandleFactory,
+					      Mas90::Utils],
+				  getopts => [{tag => 'dataFile:s',
+					       required => 't',
+					       description => 'data file to load',},
+					      {tag => "update",
+					       description => "update rather than truncate the target table"}, ],
+				  );
+print $ps->dump(); print $ps->pod();
+:>
+
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+require "$dataFile";
+
+Confess "no variable $tableList1 found in data file $dataFile"
+    unless $tableList1;
+
+my @tableList = @{$tableList1};  # this is loaded from the $dataFile ... 
+my %naturalKeys =  ('AR_Customer'  => 'customerno',
+		    'AR_InvoiceHistoryHeader', 'invoiceno',
+		    'AR_InvoiceHistoryDetail', 'headerseqno',
+		    
+		    # this is flat wrong - in the tranform step we need to create a unique key  for these records
+		    'AR_CustomerContact'  => 'customerno');
+
+foreach my $table (@tableList) {
+    debugPrint(0, "working $targetTableName");
+    my ($sourceTable, $sourceData);
+    
+    eval "\$sourceTable = \$$table" . "_table1"; # loading data from $dataFile
+    eval "\$sourceData = \$$table" . "_data1";   # loading data from $dataFile
+
+    my $targetTable = 
+	$dbhandle->cloneUnlessExists(sourceTable => $sourceTable, # build destination table if it doesn't exist.
+				     name => $dbhandle->validTableName(data => Mas90::Utils::mas90tableName(data => $table)));
+
+    $targetTable->SetM80table(prefixDateColumns => "local_");
+
+    debugPrint(0, "loading data into " . $targetTable->getName());
+
+#     $targetTable->Merge (data => $sourceData,
+# 			 sourceTable => $sourceTable,
+# 			 dateFormat => 'YYYY-MM-DD',
+# 			 naturalKey => $naturalKeys{$table});
+
+
+#     $targetTable->Merge (data => $sourceData,
+# 			 sourceTable => $sourceTable,
+			 
+
+
+#     unless ($update) {
+    $targetTable->Import (data => $sourceData,
+			  sourceTable => $sourceTable,
+			  dateFormat => 'YYYY-MM-DD',
+			  truncate => 1);
+#     } else {
+# 	$targetTable->Import (data => $sourceData,
+# 			      sourceTable => $sourceTable,
+# 			      dateFormat => 'YYYY-MM-DD',
+# 			      naturalKey => $naturalKeys{$table},
+# 			      doUpdate => 1);
+#     }
+}
+
+cleanup 0; 

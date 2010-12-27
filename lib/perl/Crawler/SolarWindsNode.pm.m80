@@ -1,0 +1,49 @@
+<: #-*- perl -*-
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Crawler::SolarWindsNode",
+			           isa => 'Crawler::CrawlerBase',
+                                   include => [],
+                                   example =>
+q[
+    my $Crawler::SolarWindsNode = $Crawler::SolarWindsNode->new();   # stub example .... expand
+],
+				   description => 'Crawler::SolarWindsNode description; stub description please expand');
+
+$po->setMembers([
+#                 {name => "filename", 
+#		  type => "string", 
+#		  required => 1,
+#		  format => '([\/\w\d]+)\.uxf',
+#		  description => "Name of the document to generate"},
+#                 {name => "elements",
+#                  ref => 'ARRAY',
+#                  description => "Array of UXFElement objects in this document"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+################################################################################
+
+sub login {
+   <:= $po->contract('login' => {description => 'login to the sugar site using the supplied credentials',
+				 getopts => []}); :>
+    do {
+	my $mech = $this->getMechHandle();
+	$mech->form_number( 1 );
+
+	$mech->set_fields(
+	    'ctl00$ContentPlaceHolder1$Username' => $this->getUsername(),
+	    'ctl00$ContentPlaceHolder1$Password' => $this->getPassword(),
+	    );
+	$mech->submit();
+    };
+}
+

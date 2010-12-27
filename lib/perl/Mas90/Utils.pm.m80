@@ -1,0 +1,53 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Mas90::Utils",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+    my $Mas90::Utils = $Mas90::Utils->new();   # stub example .... expand
+],
+				   description => 'Mas90::Utils description; stub description please expand');
+
+$po->setMembers([
+#                 {name => "filename", 
+#		  type => "string", 
+#		  required => 1,
+#		  format => '([\/\w\d]+)\.uxf',
+#		  description => "Name of the document to generate"},
+#                 {name => "elements",
+#                  ref => 'ARRAY',
+#                  description => "Array of UXFElement objects in this document"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+
+################################################################################
+
+sub mas90tableName {
+   <:= $po->contract('mas90tableName' => {description => 'convert a very long mas90 table name into something not so  lengthy',
+					  static => 1,
+					  getopts => [
+						      {name => 'data' ,
+						       required => 't',
+						       description => 'data to process',},
+						      ]}); :>
+    do {
+	$data =~ s/_//;
+	$data =~ s/Customer/Cust/;
+	$data;
+    };
+}
+
+

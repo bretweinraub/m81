@@ -1,0 +1,71 @@
+<: #-*- perl -*-
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Crawler::SugarCrawler",
+			           isa => 'Crawler::CrawlerBase',
+                                   include => [],
+                                   example =>
+q[
+    my $SugarCrawler = $SugarCrawler->new();   # stub example .... expand
+],
+				   description => 'SugarCrawler description; stub description please expand');
+:>
+<:= $po->dump(); :>
+
+sub _new { <:= $po->dumpContract(method => "_new"); :> }
+
+################################################################################
+
+sub login {
+   <:= $po->contract('login' => {description => 'login to the sugar site using the supplied credentials',
+				 getopts => []}); :>
+    do {
+	my $mech = $this->getMechHandle();
+	$mech->form_number( 1 );
+
+	$mech->set_fields(
+	    user_name => $this->getUsername(),
+	    user_password => $this->getPassword(),
+	    );
+	$mech->submit();
+    };
+}
+
+################################################################################
+
+sub _postProcess {
+   <:= $po->contract('_postProcess' => {description => 'postprocess the WWW::Mechanize content before writing it to a file',
+				       getopts => [{name => 'data' ,
+						    required => 't',
+						    description => 'data to process',},
+						   {name => 'request' ,
+						    required => 't',
+						    ref => "Crawler::CrawlerRequest",
+						    description => 'data to process',},
+						   {name => 'module',
+						    required => 't',
+						    description => 'the sugar module being parsed',},
+						   {name => 'data' ,
+						    required => 't',
+						    description => 'data to process',},
+						   ]}); :>
+    do {
+	$this->debugPrint (1, "in Crawler::SugarCrawler::postprocess");
+
+	my %dataSet = %{$request->getDataSet()};
+	my $dataSetIndex = $request->getDataSetIndex();
+
+	my $recordIdentifier = $request->getRecordIdentifier();
+
+	$this->debugPrint(0, "recordIdentifier is  $recordIdentifier");
+
+	$data =~ s/(<title>).+?(<\/title>)/$1Sugar $module Record for $recordIdentifier$2/;
+
+	# get rid of last viewed links
+	
+	$data =~ s/.+?lastViewLink.*//g;
+	
+	$data;
+    };
+}

@@ -1,0 +1,54 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "StateMachine::EventAdapter::SimpleSubscriber",
+			           isa => 'StateMachine::EventAdapter::Subscriber',
+                                   include => ['Utils::FunctionalProgramming'],
+                                   example => q[
+    my $SimpleSubscriber = $SimpleSubscriber->new();   # stub example .... expand
+                                                ],
+				   description => '
+An Object that subscribes to an Interface Provider.
+
+This Subscriber type will look back through all of an Objects parent classes trying to
+determine if it is of type $subscriber->getObjectType. It looks back through the @ISA
+hierarchy to match the type.
+
+For a subscriber that does not look back through parent class types, use ThisIsOfTypeSubscriber.
+
+');
+
+$po->setMembers([]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do {
+	$this->setObjectType($this->getXmlhash()->{object});
+	$this->setHint($this->getXmlhash()->{hint}) if $this->getXmlhash()->{hint};
+    };
+
+}
+
+#sub method {
+# remove the spaces from the tag below
+#    < : = $po->contract('method' => {description => "method description"} ); :>
+#}
+	    
+
+sub getObjects {
+    <:= $po->contract( getObjects => { description => 'Implementation of the StateMachine::EventAdapter::Subscriber interface',
+                      getopts => [ { name => 'allObjects',
+                                     ref => ARRAY,
+                                     description => 'A reference to the @allObjects memory space for the current running StateMachine task' } ] } ) :>
+
+                                         
+    # now fetch all objects that match the type                    
+    return Utils::FunctionalProgramming::getObjects('^' . $this->{objectType} . '$',  $allObjects);  # getObjects() returns an array of objects whose type match a regular expression
+}

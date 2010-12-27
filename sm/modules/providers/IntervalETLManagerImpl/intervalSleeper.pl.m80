@@ -1,0 +1,41 @@
+<: #-*- perl -*- # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'intervalSleeper.pl' , 
+                                   description => '',
+                                   include => [DB::DBHandleFactory,
+					       StateMachine::SMUtil],
+                                   getopts => [{tag => 'sleepInterval',
+						required => 't',
+						description => 'amount to sleep',},
+					       {name => 'loopNumber',
+						description => 'gets set after our first loop through',},],);
+print $ps->dump() . $ps->pod();
+:>
+
+use strict;
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+
+<:= $ps->mdimport(parent_task_id) :>
+
+    
+if ($loopNumber) {
+    debugPrint(0, "sleeping $sleepInterval seconds as loopNumber is $loopNumber");
+    sleep ($sleepInterval);
+} else {
+    $loopNumber = 0;
+}
+
+StateMachine::SMUtil::createContext (tag => "loopNumber",
+				     task_id => $parent_task_id,
+				     value => ++$loopNumber,
+				     dbhandle => $dbhandle);
+
+my %results = %{$dbhandle->getData(sql => "select to_char(SYSDATE,'YYYY-MM-DD HH24:MI:SS') NOW from dual")};
+my $sysdate = $results{NOW}[0];
+
+StateMachine::SMUtil::createContext (tag => "runDate",
+				     task_id => $parent_task_id,
+				     value => "$sysdate",
+				     dbhandle => $dbhandle);
+cleanup 0; 

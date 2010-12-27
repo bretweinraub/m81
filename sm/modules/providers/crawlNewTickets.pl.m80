@@ -1,0 +1,30 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'crawlNewTickets.pl' , 
+                                   description => '',
+                                   include => [DB::DBHandleFactory],
+                                   getopts => [
+ 					       { tag => 'crawlDir:s',
+                                                 required => 't',
+                                                 description => 'where these rt tickets get crawled to',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+
+my %results = %{$dbhandle->getData(sql => "select id, to_char (lastupdated, 'YYYY/MM/DD HH24:MI:SS') lastupdated, to_char (created, 'YYYY/MM/DD HH24:MI:SS') created from rtticket")};
+
+print Dumper(%results);
+
+for (my $i=0; $i < $results->getRows(); $i++) {
+    debugPrint (1, "processing row $i");
+}
+
+cleanup 0; 

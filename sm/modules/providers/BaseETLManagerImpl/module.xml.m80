@@ -1,0 +1,45 @@
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+$moduleHelpers::SCOPED_MODULE = 'BaseETLManagerImpl';
+
+:>
+
+<!-- begin module.xml for BaseETLManagerImpl   -->
+
+<:
+
+
+$module{run} = {a => [{n => run,
+		       c => 'exit 0',
+		       d => ['StateMachineBase-initialize',
+			     'ETL-extract',
+			     'ETL-stage',
+			     'ETL-transform',
+			     'ETL-load'],
+                          t => __SUCCESS__}]};
+
+
+
+:>
+
+<tasks>
+<:
+    for $m (values %module) {
+        print moduleHelpers::childTasks(%$m);
+    }
+:>
+</tasks>
+
+<actions>
+<:
+    for $m (values %module) {
+        print moduleHelpers::chainActions(%$m);
+    }
+:>
+</actions>
+
+<!-- end module.xml for BaseETLManagerImpl -->
+
+

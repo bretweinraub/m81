@@ -1,0 +1,174 @@
+<@ # -*-perl-*-
+# $m80path = [{ command => "embedperl -embedderChar @" }]
+    use Env qw(name);
+
+@><: #-*- perl -*-
+# $m80path = [{command => "embedperl" }];
+
+use Helpers::PerlObject;
+
+my $po = Helpers::PerlObject->new (name => "BoxMonitor::<@= $name @>",
+			           isa => 'BoxMonitor::IMonitor',
+                                   include => ['dbutil',
+                                               'BoxMonitor::Configuration',
+                                               'BoxMonitor::Command'],
+                                   example => '
+
+my $<@= $name @> = $<@= $name @>->new();   # stub example .... expand
+
+                                               ',
+				   description => '
+
+Some documentation about the <@= $name @> Monitor.
+
+');
+
+
+$po->setMembers([ { name => 'lastDBInsertUpdateDate',
+                    description => 'An internal field that saves when the db was last updated. This is a driver for the need to refresh internal config',
+                    default => '1' }
+                  ]); 
+
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+
+sub needToRefreshConfiguration { 
+    <:= $po->contract( 'needToRefreshConfiguration' => {
+                        description => '
+Return a boolean that indicates if the configuration in memory is out of date. If so, then the loadConfiguration code
+will be rerun.
+                     '} ) :>
+
+    my %update = ();
+    my $updateSQL = "
+select 	max(dt) dt 
+from 	(
+		select 	to_number (nvl (to_char (max(inserted_dt), 'YYYYDDDSSSSS'), '0')) dt 
+		from 	disk_monitor 
+		union 	all 
+		select 	to_number (nvl (to_char (max(updated_dt), 'YYYYDDDSSSSS'), '0')) dt 
+		from 	disk_monitor
+	)";
+    dbutil::loadSQL($this->getDatabaseHandle, $updateSQL, \%update, ($this->getDebug > 1 ? 1 : 0));
+    $this->debugPrint( 1, "Evaluating if config should be reloaded based on ", $this->getLastDBInsertUpdateDate, " < ", $update{DT}[0] );
+    if ($this->getLastDBInsertUpdateDate < $update{DT}[0]) {
+        $this->debugPrint(1, "Updating the Configuration");
+        $this->setLastDBInsertUpdateDate( $update{DT}[0] );
+        return 1;
+    } else {
+        return 0;
+    }  
+}
+
+
+
+sub loadConfiguration {
+    <:= $po->contract( 'loadConfiguration' => {
+                       description => q!
+This is responsible for loading and returning the configuration hash. The configurations object.
+                           !} ) :>
+
+    my %monitors = ();
+    my $confSQL = "
+select 	host, 
+	login_user, 
+	poll_interval_mins, 
+	threshold_pct, 
+	notification_list,
+        watch_nfs,
+        disk_monitor_type
+from 	disk_monitor
+where	lower(nvl(is_deleted,'n')) <> 'y'
+and     lower(disk_monitor_type) like '%<@=$name@>%'";
+
+    dbutil::loadSQL($this->getDatabaseHandle, $confSQL, \%monitors, ($this->getDebug > 1 ? 1 : 0));
+
+    $this->debugPrint( 1, "resetting the <@= $name @> configuration");
+    $this->setConfiguration( new BoxMonitor::Configuration( debug => $this->getDebug ) );
+
+    for (my $i = 0 ; $i < $monitors{rows} ; $i++) {
+
+        $this->getConfiguration->add (
+                                      host => $monitors{HOST}[$i],
+                                      user => $monitors{LOGIN_USER}[$i],
+                                      notificationList => [split /\s+/, $monitors{NOTIFICATION_LIST}[$i]],
+                                      threshold => $monitors{THRESHOLD_PCT}[$i],
+                                      watchNFS => $monitors{WATCH_NFS}[$i],
+                                      pollIntervalSecs => ($monitors{POLL_INTERVAL_MINS}[$i] * 60),
+                                      );
+    }
+
+
+}
+
+
+sub generateCommandText {
+    <:= $po->contract( 'generateCommandText' => {
+                      description => q(
+This is used to generate the command that should be remotely executed on the machine. The machine name
+and the architecture of the machine are passed into the function to be used as a determinant.
+                                        ),
+                      getopts => [ { name => 'arch',
+                                   description => 'The architecture of the host machine. Since the machines are dual boot, it is better to derive this at runtime.' },
+                                   { name => 'command',
+                                     description => 'The  command object.',
+                                     ref => 'BoxMonitor::Command' } ],
+                    } ) :>
+
+
+}
+
+
+sub evaluateCommandResults {
+    <:= $po->contract( 'evaluateCommandResults' => {
+                      description => q(
+Use this function to evaluate if the command was successful or not.
+                                      ),
+                      getopts => [
+                                  { name => 'command',
+                                     ref => 'BoxMonitor::Command',
+                                     description => 'The Command object that was processed' },
+                                   { name => 'lines',
+                                     ref => 'ARRAY',
+                                     description => 'The STDOUT of the command that was run' },
+                                   { name => 'arch',
+                                     description => 'The archictecture of the machine that the command was run against' },
+                                   { name => 'errors',
+                                     description => 'Any internal errors that were raised by running the command. This is NOT STDERR from the command'
+                                   }]
+                               } ) :>
+
+
+
+    my $host = $command->getHost;
+    my $threshold = $command->getThreshold;
+    my $basename = ref( $this ); $basename =~ s/::/_/g;
+
+    if ($errors) {
+	my $errMsg = "$host: ssh seems hosed .... this box is sick";
+        $this->simpleMail( body => $errMsg,
+                           subject => $errMsg,
+                           notificationList => $command->getNotificationList );
+
+    } else {
+	foreach (@$lines) {
+	    my @fields = split /\s+/;
+	    my $device = $fields[5];
+	    $fields[4] =~ s/\%//;
+	    my $fullness = $fields[4];
+	    
+	    if ($fullness > $threshold) {
+		my $errMsg = "$host: $device is at $fullness\%, exceeding threshold of $threshold%";
+                $this->simpleMail( body => $errMsg,
+                                   subject => $errMsg,
+                                   notificationList => $command->getNotificationList );
+	    }
+	}
+    }
+}

@@ -1,0 +1,405 @@
+<: # -*-perl-*-
+# $m80path = [{ command => embedperl }]
+use Helpers::PerlObject;
+my $po = Helpers::PerlObject->new(name => 'Helpers::PerlScript',
+				  include => ['Helpers::shellHelpers'],
+				  example => '
+
+
+my $ps = Helpers::PerlScript->new( name => \'DirCleaner.pl\' , 
+                                   description => \'Cleans up task related directories\',
+                                   include => [DB::DBHandleFactory],
+                                   getopts => [
+ 					       { tag => \'array=s@\',
+                                                 required => \'t\',
+                                                 description => \'array of values ... ends up in the $main::directories variable\',},
+ 					       { tag => \'scalar\',
+                                                 required => \'t\',
+                                                 description => \'just a scalar ... ends up in $main::scalar\',},
+					       ],
+
+',
+                                  description => 'Helper for generating PerlScripts');
+$po->setMembers([{ name => 'name', description => 'The name of this PerlScript - ends up in the POD for this script' },
+                 { name => 'description', description => 'The description of this PerlScript - ends up in the POD for this script' },
+                 { name => 'include', description => 'An array ref listing all the libs that this library depends on', ref => 'ARRAY' },
+                 { name => 'getopts', 
+                   ref => 'ARRAY',
+                   description => 'An array of hashes containing "tag", "variable", "default", "nomy" and "required". 
+
+{ tag => "debug+", variable => "$debug", nomy => "t" } and { tag => "help", variable => "\$help" } are provied by default. 
+
+The tag is a Getopt::Long description of a commandline argument. The variable is the name of the variable that the commandline info should be saved into. nomy if set will not include a "my" on the front of the variable declaration (for scoping). The default sets the default value for that variable. And required defines whether the variable is required or not.' },
+                 { name => 'suppressRequiredVariableCheck',
+                   description => 'If set to true, then the getopts fn will not try to generate a requirement statement.' },
+                 { name => 'date',
+                   description => 'the date that this compiler was run' },
+                 { name => 'isRemoteScript',
+                   description => 'If this is set, then some additional functions (remote_docmd, remote_docmdi) are included into the generated perlscript.' },
+                 ]);
+
+print $po->dump();
+:>
+
+require Exporter;
+@Helpers::PerlScript::ISA = qw(Exporter);
+@Helpers::PerlScript::EXPORT = qw(_envVar);
+
+sub tagOrName {
+    my $href = shift;
+
+    $href->{tag} . $href->{name};
+}
+
+sub _new {
+    my ($this) = @_;
+    # default $debug and $help options
+
+
+    unless ($this->getName()) {
+	my $name = $ENV{M80_PATH_FILE};
+	$name =~ s/\.m80$//;
+	$this->setName($name);
+    }
+    push @{$this->{getopts}}, ({ tag => "trace", 
+                                 variable => '$trace', 
+                                 default => 0,
+                                 nomy => 't',
+                                 description => 'The $trace command line flag turns on trace functionality'}, 
+                               { tag => "debug+", 
+                                 variable => '$debug', 
+                                 default => 0,
+                                 nomy => 't',
+                                 description => 'The $debug command line flag is additive and can be used with the &debugPrint subroutine'}, 
+                               { tag => "help", 
+                                 variable => '$help', 
+                                 default => 0,
+                                 description => 'The help command line flag will print the help message'}) 
+	if $this->{getopts};
+#    print STDERR "options: " , Dumper($this->getGetopts());
+
+    $this->setDate( scalar localtime );
+
+}
+
+sub dump {
+    <:= $po->contract( 'dump' => { description => 'function used to dump the actual PerlScript generated code', getopts => [] }); :>
+
+    my $ret = $this->_header();
+    $ret .= Helpers::shellHelpers::printmsg();
+    $ret .= Helpers::shellHelpers::docmdi();
+    $ret .= Helpers::shellHelpers::docmd();
+    if ($this->getIsRemoteScript) {
+        $ret .= _remote_docmd();
+        $ret .= _remote_docmdi();
+    }
+    $ret .= _cleanup();
+    $ret .= _debugprint();
+    $ret .= _Confess();
+    $ret .= $this->_getopts();
+    return $ret;
+}
+
+sub pod {
+    <:= $po->contract( 'pod' => { description => 'function used to dump the actual PerlScript generated poddocs', getopts => [] }); :>
+    return $this->_pod();
+}
+
+
+sub _header {
+    <:= $po->contract( '_header' => { description => 'INTERNAL function used to dump the PerlScript generated header', getopts => [] }); :>
+
+    my $ret = '#!/usr/bin/perl
+
+use Carp;
+use Getopt::Long;
+use Data::Dumper;
+use Pod::Usage;
+use File::Basename;
+
+sub print_usage {
+    if (scalar @_ > 0) {
+        print STDERR "@_\n";
+        exit(1);
+    } else {
+        pod2usage({ -exitval => 1, 
+                    -verbose => ($debug ? $debug : 1),
+                    -output  => \*STDERR});
+    }
+}
+
+';
+    my $raIncludes = $this->getInclude();
+    for my $include ( @$raIncludes ) {
+        $ret .= "use $include;\n";
+    }
+
+    return $ret;
+}
+
+sub _validateOptions {
+    <:= $po->contract( '_validateOptions' => { description => 'INTERNAL function used to confirm that the "getopts" data has all the correct information', getopts => [] }); :>
+
+    my $raGetopts = $this->getGetopts();
+    my $errorMessage = '';
+
+    for my $getopt ( @$raGetopts ) {
+        unless ($getopt->{description}) {
+            $errorMessage .= ", " if $errorMessage;
+            $errorMessage .= "'" . tagOrName($getopt) . "'";
+        }
+    }
+    if ($errorMessage) {
+        Confess "The following options are defined, but do NOT have a description field: $errorMessage\n";
+    }
+}
+
+
+sub _getopts {
+    <:= $po->contract( '_getopts' => { description => 'INTERNAL function used to dump the PerlScript generated getopts', getopts => [] }); :>
+
+	if ($this->getGetopts()) {
+	    $this->_validateOptions();
+	    my ($varString, $getOptsString, $requiredString);
+
+	    my $raGetopts = $this->getGetopts();
+
+#
+# TODO: not all Getopt::Long constructs are supported.  For instance something like "arg=s" => \@variable not implemented.
+#
+
+
+	    for my $getopt ( @$raGetopts ) {
+		Confess "tag field not defined for " . Dumper($getopt)
+		    unless tagOrName($getopt);
+		unless ( $getopt->{variable} ) {
+		    $getopt->{variable} = '$' . tagOrName($getopt) ;
+		    $getopt->{variable} =~ s/(:|=)[a-z]//g;
+		    $getopt->{variable} =~ s/\@//;
+		}
+		    
+		my $var = $getopt->{variable};
+		$var =~ s/^\$//;
+		
+		# variable representation
+		if ($getopt->{nomy}) {
+		    $varString .= $getopt->{variable};
+		} else {
+		    $varString .= 'my ' . $getopt->{variable};
+		}
+
+		if (exists $getopt->{default}) {
+		    $varString .= ' = ' . '"' . $getopt->{default} . "\";\n";
+		} else {
+		    $varString .= ";\n";
+		}
+		$varString .= "$getopt->{variable} = \$ENV{$var} if \$ENV{$var};\n"; # slurp out of the environment if it exists
+
+		# GetOptions Representation
+		$getOptsString .= "\t'" . tagOrName($getopt) . "'\t=> \\$getopt->{variable},\n";
+
+		# requirements
+		unless ( $this->getSuppressRequiredVariableCheck ) {
+		    if ($getopt->{required}) {
+			$requiredString .= "unless ($getopt->{variable}) { Warn \"$var is required\" ; print_usage() ; } \n";
+		    }
+		}
+	    }
+
+	    my $ret;
+	    $ret .= "$varString\nGetOptions( $getOptsString );\n\n";
+	    $ret .= "print_usage() if \$help;\n";
+	    $ret .= $requiredString if $requiredString;
+	    
+	    return $ret;
+	}
+}
+
+
+sub _pod {
+    <:= $po->contract( '_pod' => { description => 'INTERNAL function returns the canned pod for a script that uses this generator' } ); :>
+    my $pod = "
+\=pod
+
+\=head1 NAME
+
+";
+
+    $pod .= $this->getName();
+    $pod .= "    
+
+\=head1 SYNOPSIS
+
+";
+
+    $pod .= $this->getDescription();
+
+    my $raGetopts = $this->getGetopts();
+    if ($raGetopts && scalar @$raGetopts) {
+        $pod .= "
+
+\=head1 ARGUMENTS
+
+\=over 4
+
+";
+        for my $getopt ( @$raGetopts ) {
+            my $tag = "'" . tagOrName($getopt) . "'";
+            $tag = "[REQUIRED] $tag" if ($getopt->{required});
+            $pod .= $this->_pod_item( marker => $tag,
+                                      text   => $getopt->{description} );
+        }
+        
+    $pod .= "
+
+\=back
+
+";
+    }
+
+    my $date = $this->getDate();
+    my $uname = `uname -a`;
+    $pod .= "
+
+\=head1 PERLSCRIPT GENERATED SCRIPTS
+
+This script was generated with the Helpers::PerlScript pre-compiler.
+
+This file was automatically generated from the file: $ENV{M80PATH_FILE} by
+$ENV{USER} on $ENV{HOSTNAME} ($uname) on $date.
+
+The following functions are included by default. The functions all have 
+prototypes that make the parens optional.
+
+\=over 4
+
+\=item printmsg (\@)
+
+Will print a formatted message to STDERR.
+
+\=item docmdi (\@)
+
+Will run a system command and ignore the return code
+
+\=item docmd (\@)
+
+Will run a system command and exit with the return code of the child process, if it is non-zero
+
+\=item debugPrint (\$\@)
+
+Use it like C<debugPrint 1, 'Some info message'> or C<debugPrint 2, 'Some trace message'> and
+it will print out a little more information than the printmsg command.
+
+\=back
+
+\=cut
+
+# ## This is autogenerated documentation
+";
+
+    
+    return $pod;
+}
+
+sub _pod_item {
+    <:= $po->contract( '_pod_item' => { description => 'INTERNAL function returns a pod item block', 
+                                        getopts => [{ name => 'marker', 
+                                                      description => 'the value that should follow the "=item" text. Defaults to *' },
+                                                    { name => 'text', 
+                                                      required => 1,
+                                                      description => 'the text that is the body of the "=item"' },
+                                                      ] }); :>    
+
+    return "
+=item $marker
+
+$text
+
+";
+}
+
+
+sub _debugprint () {
+    my $o =<<'EOF';
+sub debugPrint ($@) { 
+    my $level = shift;
+    if ($debug >= $level) {
+        my ($caller) = (caller(1))[3];
+        $caller = "[$caller]:" if $caller;
+        my $date = localtime;
+        print STDERR $caller . $date . ":" . basename($0) . ":($$): @_.\n" ;
+    }
+}
+EOF
+
+}
+
+sub _cleanup () {
+    my $o =<<'EOF';
+sub cleanup ($@) { 
+    my $exit_code = shift;
+    printmsg @_ if scalar @_;
+    printmsg "exiting with exit code = $exit_code";
+    exit $exit_code;
+}
+EOF
+
+}
+
+sub _Confess () {
+    my $o =<<'EOF';
+use Term::ANSIColor qw(:constants);
+sub Confess (@) {confess BOLD, RED, @_, RESET}
+sub Warn (@) { warn YELLOW, BOLD, ON_BLACK, "@_", RESET }
+EOF
+}
+
+sub _remote_docmd () {
+    my $o =<<'EOF';
+sub remote_docmd (@) { 
+    docmd "ssh -o StrictHostKeyChecking=no -o PreferredAuthentications=publickey $user\@$host '@_'";
+}
+EOF
+
+}
+
+sub _remote_docmdi () {
+    my $o =<<'EOF';
+sub remote_docmdi (@) { 
+    docmdi "ssh -o StrictHostKeyChecking=no -o PreferredAuthentications=publickey $user\@$host '@_'";
+}
+EOF
+
+}
+
+sub _envVar {
+    my $var = shift;
+    my $h = {
+	tag => $var,
+	variable => '$' . $var,
+	required => 't',
+	description => $_[0],
+	};
+    $h;
+}
+
+sub mdimport {
+    shift;
+    my $o;
+    while (@_) {
+	my $var = shift;
+	$o .= "
+my \$$var = \$ENV{$var};
+debugPrint(1, \"$var is \$$var\");
+";
+    }
+    $o;
+}
+
+=pod
+
+=head1 Handling of Environment Variables
+
+The PerlScript default behaviour is to look in the process environment for a match to any getopt() variable.
+
+=cut

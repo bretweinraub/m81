@@ -1,0 +1,205 @@
+<: #-*- perl -*-
+# $m80path = [{command => "embedperl" }];
+
+use Helpers::PerlObject; 
+my $po = Helpers::PerlObject->new (name => "SetFrameworkPaths",
+			           isa => 'MetadataFilter',
+                                   include => ['Utils::FunctionalProgramming'],
+                                   example =>
+q[
+
+  use Metadata::Filters::SetFrameworkPaths;
+
+
+  my $pga = new PropertyGroupAggregate;
+
+  $pga->add (SetFrameworkPaths->new(name => "SetFrameworkPaths" ));
+
+
+  # Stand-Alone Usage
+
+  my $SetFrameworkPaths = $SetFrameworkPaths->new();   # stub example .... expand
+
+
+  $SetFrameworkPaths->buildPath (object => $obj,
+			  root => $test_root,
+			  tag => "alihome",
+			  value => "ali/foundation6");
+
+],
+				   description => 'A metadata filter that will correctly set variables like bea_home, domain_home, etc.');
+
+$po->setMembers([
+#                 {name => "elements",
+#                  ref => 'ARRAY',
+#                  description => "Array of UXFElement objects in this document"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub __new {
+    <:= $po->contract('__new' => {description => "internal preconstructor to used to satisfy parent consructors data requirements (as in description)",}); :>
+    $this->setDescription("Recurses over all WLS objects and setups automation metadata like bea_home, domain_home, etc.");
+}
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    $this->setDescription("Recurses over all WLS objects and setups automation metadata like bea_home, domain_home, etc.");
+}
+
+sub execute {
+    <:= $po->contract('execute' => {description => "applies this filter to the metadata hierarchy in argument allObjects",
+				   getopts => [{ name => 'allObjects', 
+						 required => 1,
+						 ref => "ARRAY",
+						 description => 'array pointer to the complete metadata hierarchy passed to this filter' },
+					       ]}); :>
+
+						   
+   my $wlversion;
+   my @allObjects = @{$allObjects};
+
+    my $wlversion = getObjects('WLVersion', @allObjects);
+    my $portalperftest = getObjects('PortalPerfTest', @allObjects);
+
+   foreach my $obj (@allObjects) {
+       print STDERR ref($obj) . "\n";
+       $_ = ref($obj); ## BAD! - this should look back through the @ISA
+     SWITCH: {
+	 /^ALIFoundationServer$/ && do {
+	     my $test_root = $obj->{appServer}->{host}->{test_root};
+	     my $osflavor = $obj->{appServer}->{host}->{osflavor};
+	     my $object = $obj->{appServer}->{host};
+	     printmsg "Found ALITestRoot as $test_root";
+
+	     $this->buildPath (object => $object,
+			       root => $test_root,
+			       osflavor => $osflavor,
+			       tag => "alihome",
+			       value => "ali/foundation6");
+
+	     $this->buildPath (object => $object,
+			       root => $test_root,
+			       osflavor => $osflavor,
+			       tag => "ali_testhome",
+			       value => "ali");
+
+	     $this->buildPath (object => $object,
+			       root => $test_root,
+			       osflavor => $osflavor,
+			       tag => "ali_installerhome",
+			       value => "ali/installer");
+	     last SWITCH;
+	 };
+
+	 /^(WLS8|)(Admin|Managed)Server$/ && do {
+	     my $test_root = $obj->{host}->{test_root};
+	     my $automation_root = $obj->{host}->{automation_root};
+	     my $osflavor = $obj->{host}->{osflavor};
+	     my $object = $obj->{host};
+
+	     Confess "No such field host" unless $obj->{host};
+             Confess "Cannot find WLVersion object" unless $wlversion;
+
+	     
+	     $this->buildPath (object => $object,
+			       root => $test_root,
+			       osflavor => $osflavor,
+			       tag => "test_root",
+			       value => "");
+
+             if ($portalperftest) {
+                 $test_root .= '/' . $portalperftest->{wl_installer_version};
+             } else {
+                 $test_root .= '/' . $wlversion->{wl_platform_version};
+             }
+
+	     
+	     $this->buildPath (object => $object,
+			       root => $test_root,
+			       osflavor => $osflavor,
+			       tag => "beahome",
+			       value => "bea");
+
+	     $this->buildPath (object => $object,
+			       root => $test_root,
+			       osflavor => $osflavor,
+			       tag => "wlhome",
+			       value => "bea/" . $wlversion->{wlhomeLabel} . $wlversion->{wl_platform_version});
+
+	     $this->buildPath (object => $object,
+			       root => $test_root,
+			       osflavor => $osflavor,
+			       tag => "testhome",
+			       value => "");
+
+	     if ($wlversion->{build_or_install} eq 'install') {
+		 $this->buildPath(root =>$test_root, 
+				  object => $object, 
+				  osflavor => $osflavor,
+				  tag => "installerhome", 
+				  value => "installer");
+
+		 $this->buildPath(root => $test_root, 
+				  object => $object, 
+				  osflavor => $osflavor,
+				  tag => "devbranch", 
+				  value => "dev/" . $wlversion->{beadev_branch_name});
+
+		 $this->buildPath(root => $automation_root, 
+				  object => $object, 
+				  osflavor => $osflavor,
+				  tag => "automation_root", 
+				  value => "");
+
+	     } else {
+		 $this->buildPath(root => $automation_root, 
+				  object => $object, 
+				  osflavor => $osflavor,
+				  tag => "devbranch", 
+				  value => "dev/" . $wlversion->{beadev_branch_name});
+	     }
+	     
+	     #
+	     # domainhome - this still needs to be set on the fly as this isn't known until runtime.
+	     # 
+
+	     last SWITCH;
+	     
+	 }
+	 
+	 
+     }
+   }
+################################################################################
+#
+# TODO: integrate the old "genPlatformSpecificPaths code. 
+#
+# Here is the block from loadAndAlterCollections.pl:
+#
+# rmapcar( sub { 
+#     my ($obj) = @_;
+#     return unless grep { /^host$/ } @{_isa(ref($obj))};
+
+#     for my $tag (split /\s+/, $obj->{directoryTags}) {
+#         my $value = $obj->{$tag};
+#         if ($obj->{osflavor} eq 'windows') {
+#             my ($winpath)  = mixedpath($value); # `$SSHCOMMAND $user@$host 'cygpath -m $value'`;
+#             my ($unixpath) = unixpath($value);  # `$SSHCOMMAND $user@$host 'cygpath -u $value'`;
+#             $obj->{$tag . '_windows'} = $winpath; # bypass mdo docs
+#             $obj->{$tag . '_unix'   } = $unixpath; # bypass mdo docs
+#         } else {
+#             $obj->{$tag . '_unix'   } = $value; # bypass mdo docs
+#         }
+
+#         print STDERR "processing $tag - associated value is $value.\n", Dumper($obj), "\n";
+
+#     }
+# }, @allObjects );
+#
+################################################################################
+
+    print BLUE . BOLD . "In MetadataFilter SetFrameworkPaths" . RESET . "\n";
+}
+

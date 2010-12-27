@@ -1,0 +1,67 @@
+  <tasks>
+
+    <task name="simple.two.step.task"
+          maxParallelism="scalarValue(q(2))"
+	  startAction="step1">
+    </task>
+
+    <task name="v2.compat.test" startAction="v2-compat-test"/>
+
+    <task name="threshold.test" startAction="threshold-test"/>
+
+    <task name="sleep"
+	  requiredData="$(task.sleepVal)"
+          maxParallelism="scalarValue(q(2))"
+	  startAction="sleep">
+    </task>
+
+  </tasks>
+
+  <actions>
+    <action name="threshold-test"
+	    maxFailures="3"
+	    command="exit 1">
+      <transitionMap>
+	<transition type="returnCode" value="0" code="$thistask->transitionTo(q(__SUCCESS__))"/>
+	<transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(__ERROR__))"/>
+      </transitionMap>
+    </action>
+
+    <action name="v2-compat-test"
+	    command="/bin/sh -c 'exit 0'">
+      <transitionMap>
+	<transition type="returnCode" value="0" code="$thistask->transitionTo(q(__SUCCESS__))"/>
+      </transitionMap>
+    </action>
+
+    <action name="sleep"
+	    isTransactional="true"
+	    maxFailures="1"
+	    command="sleep $(task.sleepVal)">
+      <transitionMap>
+	<transition type="returnCode" value="0" code="$thistask->transitionTo(q(__SUCCESS__))"/>
+	<transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(__FAILED__))"/>
+      </transitionMap>
+    </action>
+
+    <!-- actions related to simple.two.step.task -->
+
+    <action name="step1"
+	    command="exit 0">
+      <transitionMap>
+	<transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(step2))"/>
+      </transitionMap>
+    </action>
+
+
+    <action name="step2"
+	    command="exit 0">
+      <transitionMap>
+	<transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(__SUCCESS__))"/>
+      </transitionMap>
+    </action>
+
+    <!-- end actions related to simple.two.step.task -->
+	
+
+  </actions>

@@ -1,0 +1,92 @@
+<: #-*- perl -*- # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'poll.pl' , 
+                                   description => 'Polling script for PollingETLManagerImpl module',
+                                   include => [DB::DBHandleFactory,
+					       StateMachine::SMUtil],
+                                   getopts => [{ tag => 'noaction',
+                                                 description => 'take no action',},],
+                                   );
+print $ps->dump() . $ps->pod();
+:>
+
+    use strict;
+
+use POSIX ":sys_wait_h";
+use POSIX qw(setsid);
+
+<:= $ps->mdimport(NAME,parent_task_id,sourceDB,insertDateField, pollInterval, pollTableList, updateDateField, model) :>
+
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+
+my $sourceNamespace=$ENV{$sourceDB . "_m80namespace"};
+my $sourceHandle = DB::DBHandleFactory::newDBHandle(namespace => $sourceNamespace);
+
+
+my $sql = "select " . $sourceHandle->dateSelector(data => "max($updateDateField)") 
+    . " $updateDateField , " . $sourceHandle->dateSelector(data => "max($insertDateField)") . " $insertDateField from (";
+my $_sql;
+
+my @tables = split (/\s+/,$pollTableList);
+
+debugPrint(0, "table list is $pollTableList");
+
+foreach my $table (@tables) {
+    $_sql .= " union " if $_sql;
+    my $updateDateField = $ENV{$table . "_updatedField"};
+    my $insertDateField = $ENV{$table . "_createdField"};
+    debugPrint(0,"$table : updateDateField is $updateDateField, insertDateField is $insertDateField");
+    $_sql .= "select max($updateDateField) as $updateDateField, max($insertDateField) as $insertDateField from $table";
+}
+
+$sql .= $_sql . ") " . $sourceHandle->inlineViewModifier() . " maintable";
+
+my $keepWaiting = 1;
+my $updateDateFieldDerived;
+my $insertDateFieldDerived;
+my $pollTimer = 1;
+my $iterationsAtThisPollTimer = 0;
+
+while ($keepWaiting) {
+    my %results = %{$sourceHandle->getData(sql => $sql, lc => 1)};
+
+    $updateDateFieldDerived = $results{lc($updateDateField)}[0];
+    $insertDateFieldDerived = $results{lc($insertDateField)}[0];
+
+
+    my %lastUpdated = %{$dbhandle->getData(sql =>  "select * from (select count(*) keepWaiting from etlmanager where last_update >= (select max(last_run_date) from (select to_date('$updateDateFieldDerived', 'YYYY-MM-DD HH24:MI:SS') last_run_date from dual union select to_date('$insertDateFieldDerived', 'YYYY-MM-DD HH24:MI:SS') last_run_date from dual)) and etlmanager_name = '" . $NAME . "') A, (select to_char(last_update,'YYYY-MM-DD HH24:MI:SS') last_update from etlmanager where etlmanager_name = '$NAME') B")};
+
+
+    $keepWaiting = $lastUpdated{KEEPWAITING}[0];
+    my $lastUpdate = $lastUpdated{LAST_UPDATE}[0];
+
+    debugPrint (0, "($insertDateField, $updateDateField, etl manager) = ($insertDateFieldDerived, $updateDateFieldDerived, $lastUpdate)");
+
+    if ($keepWaiting) {
+	debugPrint (0, "no changes found, sleeping for $pollTimer ($iterationsAtThisPollTimer)");
+	sleep($pollTimer);
+
+	unless ($pollTimer >= $pollInterval) {
+	    if ($pollTimer eq ++$iterationsAtThisPollTimer) {
+		$pollTimer++;
+		$iterationsAtThisPollTimer = 0;
+	    }
+	}
+    }
+}
+
+my %lastUpdated = %{$dbhandle->getData(sql =>  "select to_char(max(last_run_date),'YYYY-MM-DD HH24:MI:SS') runDate from (select to_date('$updateDateFieldDerived', 'YYYY-MM-DD HH24:MI:SS') last_run_date from dual union select to_date('$insertDateFieldDerived', 'YYYY-MM-DD HH24:MI:SS') last_run_date from dual)")};
+
+my $runDate = $lastUpdated{RUNDATE}[0];
+
+Confess "bye, -noaction was set" if $noaction;
+
+StateMachine::SMUtil::createContext (tag => "runDate",
+				     task_id => $parent_task_id,
+				     value => $runDate,
+				     dbhandle => $dbhandle);
+
+debugPrint(1, "rundate is $runDate");
+
+cleanup 0; 

@@ -1,0 +1,45 @@
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+$moduleHelpers::SCOPED_MODULE = 'RtgETLImpl';
+
+:>
+
+<!-- begin module.xml for RtgETLImpl   -->
+
+<:
+
+
+$module{extract} = {a => [{n => extract,
+			   extras => 'maxParallelism="4"',
+			   c => 'extract.pl',
+			   t => __SUCCESS__}]};
+
+
+$module{load} = {a => [{n => load,
+			extras => 'maxParallelism="4"',
+			c => 'load.pl',
+			t => __SUCCESS__}]};
+
+:>
+
+<tasks>
+<:
+    for $m (values %module) {
+        print moduleHelpers::childTasks(%$m);
+    }
+:>
+</tasks>
+
+<actions>
+<:
+    for $m (values %module) {
+        print moduleHelpers::chainActions(%$m);
+    }
+:>
+</actions>
+
+<!-- end module.xml for RtgETLImpl -->
+
+

@@ -1,0 +1,66 @@
+<: #-*- perl -*-
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+ use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'getMasterTaskID.pl.m80.pl' , 
+                                   description => 'given a task_id, return the master_task_id that corresponds.',
+                                   include => ['dbutil', 'Data::Dumper'],
+#                                   suppressRequiredVariableCheck => 't',
+                                   getopts => [
+					       { tag => 'task_id:i',
+                                                 variable => '$task_id',
+                                                 description => 'The task_id that is used as the root for deriving the master_task_id.',},
+					       { tag => 'taskname:s',
+                                                 variable => '$taskname',
+                                                 description => 'The taskname used to derive the task_id to derive the root for deriving the master_task_id.',},
+
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+require "dbConnect.pl";
+ 
+print_usage() unless $task_id || $taskname;
+
+my $my_task_id = ''; my $sql = ''; my $no_drill_down = 0;
+if ($task_id) {
+    $sql = "select count(task_id) cnt from task where task_id = $task_id and parent_task_id is null";
+    dbutil::loadSQL ($dbh, $sql, \%tasks, $debug);
+    $no_drill_down = $tasks{'CNT'}->[0];
+} elsif ($taskname) {
+    $sql = "select count(task_id) cnt from task where taskname = '$taskname' and status not in ('queued','canceled')";
+    $no_drill_down = 0;
+}
+    
+unless ($no_drill_down) {
+    
+    debugPrint(1, "Found a CNT in the db, looking up the master_task_id");
+    if ($task_id) {    
+        $sql = " select 	task_id 
+	 from 	task  
+         start with 
+		task.task_id = 	$task_id
+	 connect by 
+		task.task_id = prior task.parent_task_id 
+";
+#          where parent_task_id is null
+    } elsif ($taskname) {
+        $sql = " select 	task_id 
+	 from 	task  
+         start with 
+		task.task_id = (select max(task_id) from task where taskname = '$taskname' and status not in ('queued','canceled'))
+	 connect by 
+		task.task_id = prior task.parent_task_id 
+";
+    }
+        
+    dbutil::loadSQL ($dbh, $sql, \%s, $debug);
+    $task_ids = $s{TASK_ID};
+    $my_task_id = $task_ids->[ @$task_ids - 1 ];
+} else {
+    $my_task_id = $task_id;
+}
+print "$my_task_id\n";
+
+cleanup 0; # "

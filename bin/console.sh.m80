@@ -1,0 +1,26 @@
+<: # -*-sh-*-
+use Helpers::shellHelpers; # $m80path = [{command => "embedperl"}, {command => "m4", chmod => "+x" }];
+print Helpers::shellHelpers::shellScript ( 
+    #r => [required],
+                                           getopts => '(a,action_id)'
+); 
+:>
+
+echo -n $PROGNAME: loading your m80 environment ...." "
+eval $(m80 --export)
+echo done
+
+if [ -n "$action_id" ]; then
+    echo -n $PROGNAME: loading your action environment ...." "
+    m80 --execute dumpContext.pl -a $action_id > $TMPFILE.0
+    . $TMPFILE.0
+    echo done
+
+fi
+
+
+docmd console.pl
+
+cleanup 0
+
+    

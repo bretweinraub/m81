@@ -1,0 +1,45 @@
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+:>
+
+<!-- begin module.xml for __your_name_here__   -->
+
+<:
+
+$module{directoryCleaner} =  (a => [{n => directoryCleaner,
+				     c => 'DirCleaner.pl -target $(task.target) -direct $(task.directory)',
+				     extras => 'isTransactional="1"',
+				     transitions => {'\d+' => '__ERROR__',
+						     '0' => '__ERROR__',},
+				     t => __ERROR__}]);
+
+
+$module{wgetCrawler} = (a => [{n => wgetCrawler,
+			       c => 'wgetCrawler.pl -config $(task.config)',
+			       extras => 'isTransactional="1"',
+			       transitions => {'\d+' => '__ERROR__',
+					       '0' => '__ERROR__',},
+			       t => __ERROR__}]);
+
+:>
+
+<tasks>
+<:
+    for $m (values %module) {
+        print moduleHelpers::childTasks(%$m);
+    }
+:>
+</tasks>
+
+<actions>
+<:
+    for $m (values %module) {
+        print moduleHelpers::chainActions(%$m);
+    }
+:>
+</actions>
+
+
+<!-- end module.xml for __your_name_here__ -->

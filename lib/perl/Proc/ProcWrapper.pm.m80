@@ -1,0 +1,120 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Proc::ProcWrapper",
+			           isa => '',
+                                   include => [Proc::ProcessTable],
+                                   example =>
+q[
+    my $ProcWrapper = $ProcWrapper->new();   # stub example .... expand
+],
+				   description => 'wrapper around Proc::ProcessTable');
+
+$po->setMembers([
+                 {name => "self", 
+		  type => "Proc::ProcessTable", 
+		  description => "ProcessTable entry for this process"},
+                 {name => "pgrp",
+                  description => "self process group id"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do {
+	my $p = new Proc::ProcessTable;
+	my $thisp;
+	foreach my $proc (@{$p->table}) {
+	    if ($proc->{pid} =~ $$) {
+		$thisp = $proc;
+		goto END;
+	    }
+	}
+      END:
+	$this->setSelf($thisp);
+	$this->setPgrp($thisp->{pgrp});
+    };
+}
+
+
+################################################################################
+
+sub processGroupList {
+   <:= $po->contract('processGroupList' => {description => 'return an array reference to pid structures matching a certain process group',
+					    static => t,
+					    getopts => [
+						{name => 'pgrp' ,
+						 required => 't',
+						 description => 'process group to query',},
+					    ]}); :>
+    do {
+	my @ret = ();
+	my $p = new Proc::ProcessTable;
+	foreach my $proc (@{$p->table}) {
+	    push (@ret, $proc) if $proc->{pgrp} eq $pgrp;
+	}
+	\@ret
+    };
+}
+
+
+################################################################################
+
+sub killProcessGroup {
+   <:= $po->contract('killProcessGroup' => {description => 'make an attempt to expunge an old process group.  Only processes that have a ppid of 1 (or are in a tree with an ancestor with a ppid of 1) will be exterminated.  Also only pids that have the same uid as the calling pid are evaluated also',
+					    getopts => [
+						{name => 'pgrp' ,
+						 required => 't',
+						 description => 'process group to query',},
+						{name => "killSignals",
+						 ref => ARRAY,
+						 description => "an array of signals to use to kill process group"},
+						{name => "nokill",
+						 description => "for debugging, only prints out what it would have done"},
+						]}); :>
+    do {
+
+	my @killSignals = @{$killSignals};
+	return if $#killSignals < 0;                                            # exits recursive calls
+
+	my $self = $this->getSelf();
+	my @pgrp = ();
+	
+	my $p = new Proc::ProcessTable;
+	foreach my $proc (@{$p->table}) {
+	    push (@pgrp, $proc) if ($proc->{pgrp} eq $pgrp and
+				    $proc->{uid} eq $self->{uid} and
+				    $proc->{ppid} eq 1);
+	}
+	
+	if ($#pgrp >= 0) {
+	    $this->debugPrint (1, "this process group appears to be orphaned by the caller");
+	    foreach my $proc (@pgrp) {
+		$this->debugPrint (1, "found candidate process " . $proc->{pid} . " : " . $proc->{cmndline});
+	    }
+	    my $thisSignal = shift @killSignals;
+
+	    $this->debugPrint (1, "send signal $thisSignal to process group $pgrp");
+	    $this->debugPrint (1, "kill -$thisSignal, $pgrp");
+	    kill -$thisSignal, $pgrp unless $nokill;
+	    Warn "$@" if $@;
+
+	    $this->killProcessGroup(pgrp => $pgrp,
+				    killSignals => \@killSignals,
+				    nokill => $nokill,);
+	} else {
+	    $this->debugPrint (1, "I didn't feel like this group appeared to be orphaned");
+	}
+    };
+}
+
+
+
+sub flushProcessGroup
+

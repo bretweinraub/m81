@@ -1,0 +1,36 @@
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+$moduleHelpers::SCOPED_MODULE = 'ETLManager';
+$moduleHelpers::MODULE_DESCRIPTION = ''; # SPECIFY A MODULE DESCRIPTION
+:>
+
+<!-- begin module.xml for ETLManager   -->
+
+<:
+
+#
+# Following is the list of events that this interface defines. Each event definition is an
+# anonymous hash with the following keys:
+#    - eventName (The name of the event - same as the dispatch name)
+#    - description (A description of the event, intention, etc)
+#
+# 
+
+my @events = ( { eventName => 'run',
+                 description => 'ETLManager run action' },
+	       { eventName => 'stop',
+                 description => 'ETLManager stop action' },
+	       );
+
+
+
+#print moduleHelpers::interfaceModule( events => \@events, supportAOP => 1 );
+print moduleHelpers::interfaceModule( events => \@events);
+
+:>
+
+<!-- end module.xml for ETLManager -->
+
+

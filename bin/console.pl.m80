@@ -1,0 +1,28 @@
+<: #-*- perl -*-  # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'console.pl' , 
+                                   description => 'description for console',
+                                   include => [],
+                                   getopts => [
+#  					       { tag => 'someTag:s',
+#                                                required => 't',
+#                                                default => '1'
+#                                                description => 'description of someTag',},
+					       ],
+                                   );
+print $ps->dump() . $ps->pod();
+:>
+ 
+#print_usage() unless .... some condition;
+
+print "-> "; 
+while(<>) {
+    $xyzzy=eval; 
+    print "$@" if $@; 
+    print "=> $xyzzy";
+    print "\n\n-> ";
+}
+
+
+cleanup 0; # "

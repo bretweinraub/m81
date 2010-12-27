@@ -1,0 +1,39 @@
+<: #-*- perl -*- # $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Crawler::SugarLead",
+			           isa => 'Crawler::SugarCrawler',
+                                   include => [],
+                                   example =>
+q[
+    my $Crawler::SugarLead = $Crawler::SugarLead->new();   # stub example .... expand
+],
+				   description => 'Crawler::SugarLead description; stub description please expand');
+$po->setMembers([]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+sub postProcess {
+    <:= $po->contract('postProcess' => {description => 'postprocess the WWW::Mechanize content before writing it to a file',
+					getopts => [{name => 'data' ,
+						     required => 't',
+						     description => 'data to process',},
+						    {name => 'request' ,
+						     required => 't',
+						     ref => "Crawler::CrawlerRequest",
+						     description => 'data to process',},
+					    ]}); 
+:>
+    do {
+	# call the _postProcess method in the super class aka SugarCrawler
+	$this->_postProcess(data => $data,
+			    request => $request,
+			    module => "Lead",);
+	
+    };
+}

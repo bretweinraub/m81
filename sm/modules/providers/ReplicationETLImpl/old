@@ -1,0 +1,27 @@
+
+
+# my $numETLManagers = 0;
+# my $ETLManager;
+# foreach my $obj (@allObjects) {
+#     debugPrint (0, "found obj " . $obj->getName() . " of type " . ref($obj));
+#     if (ref($obj) =~ /ETLManager/) {
+# 	$numETLManagers++;
+# 	$ETLManager = $obj;
+#     }
+# }
+# Confess "more than one ETL manager is not currently implemented.  The way to do this would be for the ETL manager, when dispatched to, put a pointer in the child context that would indicate which ETL manager they are the children of so that they could navigate the metadata objects accordingly"
+#     if $numETLManagers > 1;
+
+
+# sub createTable {
+#     my ($dbhandle, $sourceTable, $targetTableNames ) = @_;
+
+#     foreach my $targetTableName (@{$targetTableNames}) {
+# 	if (not $dbhandle->tableExists(name => $targetTableName)) {
+# 	    $dbhandle->clone(sourceTable => $sourceTable,
+# 			     name => $targetTableName);
+# 	} else {
+# 	    debugPrint (0, "skipped table create of $targetTableName since it already exists");
+# 	}
+#     }
+# }

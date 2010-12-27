@@ -1,0 +1,136 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "StateMachine::SMUtil",
+			           isa => '',
+                                   include => [DB::RowSet,
+					       'FileHandle'],
+                                   example =>
+q[
+    my $Util = $SMUtil->new();   # stub example .... expand
+],
+				   description => 'Utilities for interacting state machines');
+
+$po->setMembers([
+#                 {name => "filename", 
+#		  type => "string", 
+#		  required => 1,
+#		  format => '([\/\w\d]+)\.uxf',
+#		  description => "Name of the document to generate"},
+#                 {name => "elements",
+#                  ref => 'ARRAY',
+#                  description => "Array of UXFElement objects in this document"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+sub openTLOGFile {
+    <:= $po->contract('openTLOGFile' => {description => 'return a filehandle to the tlog file for this task_id and action_id and action_name',
+					 getopts => [ { name => 'task_id',
+							description => 'task_id of this logfile',
+							required => t},
+						      { name => 'action_id',
+							description => 'action_id of this logfile',
+							required => t},
+						      { name => 'actionname',
+							description => 'actionname of this logfile',
+							required => t} ]}); :>
+   do {							    
+       my $FileHandle = new FileHandle;
+       my $logfile = "/var/www/html/$ENV{M80_BDF}/taskData/$task_id/$action_id.$actionname.0";
+
+       printmsg "opening log file $logfile";
+
+       $FileHandle->open($logfile)
+	   or Confess "failed to open $logfile: $@";
+       return $FileHandle;
+   }
+							    
+}
+
+
+sub fetchActionRecord {
+    <:= $po->contract('fetchActionRecord' => {description => "fetch the action record based on task_id (parent or master) and action name",
+					      getopts => [ { name => 'master_task_id',
+							     required => t,
+							     default => '$ENV{master_task_id}',
+							     description => 'The master or parent task id' }, 
+							   { name => "actionname",
+							     required => t,
+							     description => "actionname with in this task tree"},
+							   { name => "verbose",
+							     description => "turn on SQL verbosity",},
+							   { name => "dbhandle",
+							     required => t,
+							     description => "dbhandle for this sm schema",}, ] } ); :>
+   do {
+       printmsg "(StateMachine::SMutil::fetchActionRecord) deriving action data .... this could take a second";
+       return (DB::RowSet->new(dbh => $dbhandle->getDbh(),
+			       verbose => $verbose,
+			       sql => "
+select 	action.*,
+	to_char (action.updated_dt,'MM/DD/YYYY HH24:MI:SS') updated_dt_char,
+	to_char (action.inserted_dt,'MM/DD/YYYY HH24:MI:SS') inserted_dt_char
+from 	action,
+	task,
+	( 
+		select 	task_id, 
+			level l
+		from 	task  
+		start with 
+			task_id = $master_task_id
+		connect by prior 
+			task_id = parent_task_id 
+	) iv
+where 	action.task_id = iv.task_id
+and	task.task_id = action.task_id
+and	actionname = '$actionname'
+order by 
+	action.inserted_dt"))->getResults();
+   }
+}
+
+
+################################################################################
+
+sub createContext {
+   <:= $po->contract('createContext' => {description => 'creates a context variable',
+					 static => 1,
+					 getopts => [
+						     {name => 'task_id' ,
+						      required => 't',
+						      default => '$ENV{task_id}',
+						      description => 'data to process',},
+						     {name => 'tag',
+						      required => 1,
+						      description => 'tag to create'},
+						     {name => 'value',
+						      required => 1,
+						      description => 'value to create'},
+						     {name => 'dbhandle',
+						      required => 1,
+						      ref => 'DB::DBHandle',
+						      description => 'dbhandle to use'},
+						     {name => 'verbose',
+						      description => 'verbosity'},
+						     {name => 'nodelete',
+						      description => 'don\'t attempt to delete the row first'},
+						     ]}); :>
+    do {
+	$dbhandle->execute (sql => "delete from task_context where task_id = $task_id and tag = '$tag'",
+			    verbose => $verbose)
+	    unless $nodelete;
+	$dbhandle->execute (sql => "insert into task_context (task_id, tag, value) values ($task_id, '$tag', '$value')",
+			    verbose => $verbose);
+    };
+}
+

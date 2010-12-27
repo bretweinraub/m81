@@ -1,0 +1,657 @@
+<: #-*- perl -*- # $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "DB::Table",
+			           isa => '',
+                                   include => [DBI, 
+					       DB::Utils,
+					       'Time::HiRes qw( gettimeofday tv_interval )',
+					       Utils::ContextInsensitiveHash],
+                                   example =>
+q[
+  my $DBTable = $DB::Table->new();   # stub example .... expand
+
+  # for results that mirror the target table, use the Import() function
+  
+  $DBTable->Import (data => \%results,
+		    sourceTable => $etlhelper->getSourceTable(),
+		    truncate => 1);  # optional ; truncates the destination if set.
+
+],
+				   description => 'DB::Table description; stub description please expand');
+
+$po->setMembers([{name => "handle", 
+		  ref => "DB::DBHandle", 
+		  required => 1,
+		  description => "Handle that created this table object"},
+		 {name => "name",
+		  required => 1,
+		  description => "The name of this table"},
+		 {name => "_field_cache",
+		  ref => 'ARRAY',
+		  description => "internal variable used to cache metadata for import statements"},
+		 {name => "_field_cache_stmt",
+		  ref => 'DBI::st',
+		  description => "internal variable used to cache metadata for import statements"},
+		 {name => "primaryKeyName",
+		  description => "name of this tables primary key name"},
+		 {name => "insertedDateColumnName",
+		  description => "name of the trigger driven column name for inserts"},
+		 {name => "updatedDateColumnName",
+		  description => "name of the trigger driven column name for updates"},
+		 {name => "prefixDateColumns",
+		  default => "local_",
+		  description => "use this prefix where deriving column names",},
+		 {name => "m80table",
+		  description => "if a m80 table we can derive certain things about the table"},
+                 {name => "columns",
+#                  ref => 'Utils::ContextInsensitiveHash',
+		  ref => HASH,
+                  description => "Array of Column objects for this table"},]); 
+
+print $po->dump();
+:>
+#
+# TODO:  This class should become an ISA of the DBI handle.  
+#
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do {
+	tie my %columns, "Utils::ContextInsensitiveHash";
+
+	my $stmt;
+	eval {
+	    $stmt = $this->getHandle()->getDbh()->prepare("select * from ".$this->getName() . " where 1 = 0");
+	    $stmt->execute();
+	}; 
+	Confess "$@" if $@;
+
+	$this->debugPrint (1, "loading metadata for table " . $this->getName());
+
+	for (my $i = 0 ; $i < $stmt->{NUM_OF_FIELDS} ; $i++) {
+	    my $column = $stmt->{NAME}->[$i];
+	    $this->debugPrint(2, "found field $column");
+	    my $ret = DB::FieldMetaData->new (name => $column,
+					      type => $stmt->{TYPE}->[$i],
+					      precision => $stmt->{PRECISION}->[$i],
+					      handle => $this->getHandle(),
+					      scale => ($stmt->{SCALE}->[$i] ?
+							$stmt->{SCALE}->[$i] : 0));
+
+	    $columns{$column} = $ret;
+	}
+	
+	$this->setColumns(\%columns);
+	$this->setM80table() 
+	    if $this->getM80table();
+    };
+}
+
+################################################################################
+
+sub exists {
+    <:= $po->contract('exists' => {description => 'validates that a column exists in this table'}); :>
+    do {
+	my %columns = %{$this->getColumns()};
+	
+	foreach my $testColumn (@_) {
+	    my $found = 0;
+	    foreach my $columnName (sort (keys(%columns))) {
+		if (lc ($columnName) eq $testColumn) {
+		    $found = 1;
+		    last;
+		}
+	    }
+	    Confess "no such column $testColumn in table " . $this->getName()
+		unless $found;
+	}
+    };
+}
+
+sub SetM80table {
+   <:= $po->contract('SetM80table' => {description => 'rigs all the meta data associated with a m80 table',
+				       getopts => [{name => "prefixDateColumns",
+						    description => "use this prefix where deriving column names",},]}); :>
+    do {
+	$this->debugPrint(0, "setting m80table on " . $this->getName . " : $prefixDateColumns");
+	$this->setPrefixDateColumns($prefixDateColumns);
+
+	unless ($this->getInsertedDateColumnName()) {
+	    $this->setInsertedDateColumnName($this->getPrefixDateColumns() . "inserted_dt");
+	}
+	unless ($this->getUpdatedDateColumnName()) {
+	    $this->setUpdatedDateColumnName($this->getPrefixDateColumns() . "updated_dt");
+	}
+
+	$this->exists($this->getInsertedDateColumnName(),
+		      $this->getUpdatedDateColumnName());
+    };
+}
+
+
+################################################################################
+
+sub executeBindStatement {
+    <:= $po->contract('executeBindStatement' => {description => 'insert a row from a row set based on a row number.  Returns the number of rows affected.',
+						 getopts => [{name => "sourceTable",
+							      ref => 'DB::Table',
+							      description => 'source table metadata',},
+							     {name => 'ignorePrimaryKey',
+							      description  => 'ignore the primary key of the table'},
+							     {name => 'ignoreModificationColumns',
+							      description  => 'ignore modification columns (if they exist).'},
+							     {name => 'statement' ,
+							      required => 't',
+							      description => 'prebuilt DBI statement object',},
+							     {name => 'key' ,
+							      description => 'for update statements this is the natural key.  If you set this for an insert statement you may get an error.',},
+							     {name => 'rowNumber' ,
+							      required => 't',
+							      description => 'rowNumber to use for bind data',},
+							     {name => 'data' ,
+							      required => 't',
+							      ref => HASH,
+							      description => 'data to process',},]}); :>
+    do {
+	my %columns = %{$this->getColumns()};                                   # list of columns in this table
+
+	my $handle = $this->getHandle();
+
+	$this->debugPrint (2, "processing row number $rowNumber");
+	my $bindNumber = 0;
+	
+	my @fieldCache = ();
+	unless ($this->get_field_cache() and
+		$this->get_field_cache_stmt() eq $statement) {
+	    $this->debugPrint (1, "updating field cache");
+
+#
+# XXX - right now ; if the column name in the source table doesn\'t match the column name in the destination table
+# this code can't connect the dots.  This is because when going from something like MySQL to Oracle, Oracle names have
+# to be 30 characters or less, so in some cases the column names wont match up.
+#
+	    foreach my $columnName (sort (keys(%columns))) {		
+		push (@fieldCache, $sourceTable->getField(data => $columnName))
+		    unless $this->ignoreColumn(ignorePrimaryKey => $ignorePrimaryKey,
+					       columnName => $columnName,
+					       ignoreModificationColumns => $ignoreModificationColumns);
+	    }
+
+	    $this->set_field_cache(\@fieldCache);
+	    $this->set_field_cache_stmt($statement);
+	}                                                                       # performance enhancement to avoid looking up field meta data repeatedly.
+# 	else {
+# 	    $this->debugPrint (1, "using existing field cache");
+	    
+# 	}
+
+	my $ndx = 0;
+	@fieldCache = @{$this->get_field_cache()};
+	    
+	foreach my $columnName (sort (keys(%columns))) {
+	    do {
+		my $fieldMetaData = $fieldCache[$ndx];
+
+		$bindNumber++;
+		my $data = $handle->scrubBindData ( field => $fieldMetaData,
+						    data => $data->{uc($columnName)}[$rowNumber] . 
+						    $data->{lc($columnName)}[$rowNumber] ); #try hard to find the column .... upper or lower case
+
+		$statement->bind_param($bindNumber, $data) ;
+		$this->debugPrint (3, "bound \"$data\" to column $columnName (:p$bindNumber)");
+		$ndx++;
+	    } unless $this->ignoreColumn(ignorePrimaryKey => $ignorePrimaryKey,
+					 columnName => $columnName,
+					 ignoreModificationColumns => $ignoreModificationColumns);
+	}
+	eval {
+	    $statement->bind_param(++$bindNumber,$key) if $key;                       # this means this in an update
+	};
+	Confess "error binding key to SQL statement.  Maybe you passed in an undeeded \$key argument to INSERT bind: $@" if $@;
+	$this->debugPrint (1, "bound $bindNumber paramaters to SQL statement");
+
+	my $rowsAffected;
+	eval { $statement->execute(); $rowsAffected = $statement->rows; }; Confess "$@" if $@;
+	$rowsAffected;
+    };
+}
+
+sub Merge {
+   <:= $po->contract('Merge' => {description => 'merge data into this table based on a results set.  Matches on the defined natural key are updated, otherwise the row is inserted',
+				  getopts => 
+				      [{name => 'dateFormat',
+					default => 'YYYY-MM-DD HH24:MI:SS',
+					description => "can be used to specify the date format used in the input"},
+				       {name => 'data' ,
+					required => 't',
+					ref => HASH,
+					description => 'data to process',},
+				       {name => 'keyMap',
+					ref => HASH,
+					description => 'if a key map is provided, only those natural keys in the map will be executed on',},
+				       {name => 'naturalKey',
+					required => 1,
+					description => 'natural key of the data set',},
+				       {name => "sourceTable",
+					ref => 'DB::Table',
+					required => 1,
+					description => 'source table metadata of type DB::Table->new()',},]}); :>
+    do {
+	my $handle = $this->getHandle();
+
+	my $updateSql = $this->genUpdateSQL(dateFormat => $dateFormat,
+					    sourceTable => $sourceTable,
+					    ignorePrimaryKey => 1,
+					    ignoreModificationColumns => 1,
+					    naturalKey => $naturalKey);
+	my $insertSql = $this->genInsertSQL(dateFormat => $dateFormat,
+					    ignoreModificationColumns => 1,
+					    ignorePrimaryKey => 1,
+					    sourceTable => $sourceTable);
+
+	my $dbh = $handle->getDbh();
+	my $RaiseError = $dbh->{RaiseError};                                    # save so as to replace later
+	my $AutoCommit = $dbh->{AutoCommit};                                    # save so as to replace later
+
+	$dbh->{RaiseError} = 1;
+	$dbh->{AutoCommit} = 0;                                                 # should perform better
+
+	my $updateStmt = $dbh->prepare($updateSql);
+	my $insertStmt = $dbh->prepare($insertSql);
+
+	my $i;
+	my $numUpdated = 0;
+	my $numInserted = 0;
+	for ( $i = 0; $i < $data->{rows} ; $i++) {
+	    my $key = $data->{uc($naturalKey)}[$i] . $data->{lc($naturalKey)}[$i];  # I hate this ... there's got to be a better way
+	    $this->debugPrint (2, "key data for $naturalKey is $key");
+
+	    next if 
+		($naturalKey && 
+		 $keyMap && 
+		 not $keyMap->{uc($data->{$naturalKey}[$i]) . lc($data->{$naturalKey}[$i])}); # skip if not in the key map
+
+	    my $_numUpdated;
+	    eval {
+		$_numUpdated = $this->executeBindStatement(statement => $updateStmt,
+							   rowNumber => $i,
+							   key => $key,
+							   ignorePrimaryKey => 1,
+							   ignoreModificationColumns => 1,
+							   sourceTable => $sourceTable,
+							   data => $data);
+	    };
+	    Confess "$updateSql: $@" if $@;
+	    if ($_numUpdated > 0) {
+		$numUpdated++; 
+	    } else {
+		eval  {
+		    $this->executeBindStatement(statement => $insertStmt,
+						rowNumber => $i,
+						ignorePrimaryKey => 1,
+						ignoreModificationColumns => 1,
+						sourceTable => $sourceTable,
+						data => $data);
+		}; 
+		Confess "$insertSql: $@" if $@;
+		$numInserted++;
+	    }
+	    $this->debugPrint (1, "wrote record $i");
+
+	}
+	$this->debugPrint(0, "updated $numUpdated, inserted $numInserted");
+
+	$dbh->commit();
+	$dbh->{RaiseError} = $RaiseError;                                       # restore old value for this
+	$dbh->{AutoCommit} = $AutoCommit;                                       # restore old value for this
+    };
+}
+
+################################################################################
+
+sub Import {
+   <:= $po->contract('Import' => {description => 'import data into this table based on a results set',
+				  getopts => 
+				      [{name => 'dateFormat',
+					default => 'YYYY-MM-DD HH24:MI:SS',
+					description => "can be used to specify the date format used in the input"},
+				       {name => 'data' ,
+					required => 't',
+					ref => HASH,
+					description => 'data to process',},
+				       {name => 'keyMap',
+					ref => HASH,
+					description => 'if a key map is provided, only those natural keys in the map will be executed on',},
+				       {name => 'naturalKey',
+					description => 'natural key of the data set',},
+				       {name => 'doUpdate',
+					description => "update the data that matches the rows in the data set.  Requires a natural key defined on the table"},
+				       {name => "truncate",
+					description => 'truncate this table if set',},
+				       {name => 'ignorePrimaryKey',
+					description  => 'ignore the primary key of the table when updating values.  This is  implied by doUpdate'},
+				       {name => 'ignoreModificationColumns',
+					description  => 'ignore modification columns (if they exist).'},
+				       {name => "sourceTable",
+					ref => 'DB::Table',
+					required => 1,
+					description => 'source table metadata of type DB::Table->new()',},]}); :>
+    do {
+	my $startTime = [gettimeofday];
+
+	do {
+	    $ignorePrimaryKey = $ignoreModificationColumns = 1;
+	} if $doUpdate;
+	
+	Confess "cannot truncate table when in update mode"
+	    if $truncate and $doUpdate;
+
+	Confess "natural key data required for update statements"
+	    if $doUpdate and not defined $naturalKey;
+
+	my $sql = ($doUpdate ? $this->genUpdateSQL(dateFormat => $dateFormat,
+						   sourceTable => $sourceTable,
+						   ignorePrimaryKey => $ignorePrimaryKey,
+						   ignoreModificationColumns => $ignoreModificationColumns,
+						   naturalKey => $naturalKey) 
+		   : $this->genInsertSQL(dateFormat => $dateFormat,
+					 sourceTable => $sourceTable));
+
+	$this->debugPrint (1, ($doUpdate ? "update" : "insert") . " statement is $sql");
+
+	my $handle = $this->getHandle();
+
+	$handle->truncateTable(name => $this->getName()) if
+	    $truncate && not $doUpdate;
+	
+	my $dbh = $handle->getDbh();
+	my $RaiseError = $dbh->{RaiseError};                                    # save so as to replace later
+	my $AutoCommit = $dbh->{AutoCommit};                                    # save so as to replace later
+
+	$dbh->{RaiseError} = 1;
+	$dbh->{AutoCommit} = 0;                                                 # should perform better
+	
+	my $stmt = $dbh->prepare($sql);
+#	$this->debugPrint (4, "data is " .Dumper($data));
+
+	my $i;
+	for ( $i = 0; $i < $data->{rows} ; $i++) {
+	    my $key = $data->{uc($naturalKey)}[$i] . $data->{lc($naturalKey)}[$i];
+	    $this->debugPrint (2, "key data for $naturalKey is $key");
+
+	    eval {
+		$this->executeBindStatement(statement => $stmt,
+					    rowNumber => $i,
+					    key => $key,
+					    ignorePrimaryKey => $ignorePrimaryKey,
+					    ignoreModificationColumns => $ignoreModificationColumns,
+					    sourceTable => $sourceTable,
+					    data => $data) 
+		    unless ($naturalKey && 
+			    $keyMap && 
+			    not $keyMap->{uc($data->{$naturalKey}[$i]) . lc($data->{$naturalKey}[$i])});
+	    };
+	    Confess "error in $sql: $@" if $@;
+	    $this->debugPrint (1, "wrote record $i");
+
+	}
+
+	my $endTime = [gettimeofday];
+
+	$this->debugPrint (0, ($doUpdate ? "updated" : "inserted") . 
+			   " $i records to table " . $this->getName() . 
+			   " in " . TV_INTERVAL(start => $startTime, end => $endTime));
+
+	$this->debugPrint (0, "time per row is " . (tv_interval($startTime,$endTime)/$i))
+	    if $i;
+	
+	$this->debugPrint (0, "rows/second is " . ($i/tv_interval($startTime,$endTime)));
+
+
+	$dbh->commit();
+	$dbh->{RaiseError} = $RaiseError;                                       # restore old value for this
+	$dbh->{AutoCommit} = $AutoCommit;                                       # restore old value for this
+
+    };
+}
+
+################################################################################
+
+sub genInsertSQL {
+   <:= $po->contract('genInsertSQL' => {description => 'generate a insert sql statement',
+					getopts => [{name => 'dateFormat',
+						     default => 'YYYY-MM-DD HH24:MI:SS',
+						     description => "can be used to specify the date format used in the input"},
+						    {name => 'ignorePrimaryKey',
+						     description  => 'ignore the primary key of the table'},
+						    {name => 'ignoreModificationColumns',
+						     description  => 'ignore modification columns (if they exist).'},
+						    {name => "sourceTable",
+						     ref => 'DB::Table',
+						     description => 'truncate this table if set',},
+						    ]}); :>
+    do {
+	my %columns = %{$this->getColumns()};
+
+	my $sql = "insert /*+ APPEND */ into " . $this->getName() . "(\n";
+	my $handle = $this->getHandle();
+
+	my $numColumns = 0;
+	foreach my $columnName (sort (keys(%columns))) {
+	    $sql .= ($numColumns++ ? ",\n" : "") . "\t$columnName"
+		unless $this->ignoreColumn(ignorePrimaryKey => $ignorePrimaryKey,
+					   columnName => $columnName,
+					   ignoreModificationColumns => $ignoreModificationColumns);
+	}	
+	$sql .= "\n) values (\n";
+	$numColumns=0;
+	my $numBindParams = 0;
+	foreach my $columnName (sort (keys(%columns))) {
+	    if ($this->ignoreColumn(ignorePrimaryKey => $ignorePrimaryKey,
+				    columnName => $columnName,
+				    ignoreModificationColumns => $ignoreModificationColumns)) {
+		$this->debugPrint(2, "ignoring column $columnName");
+	    } else {
+		$sql .= ($numColumns++ ? ",\n" : "") . "\t" . $handle->bindParam(data => $columns{$columnName},
+										 sourceTable => $sourceTable,
+										 dateFormat => $dateFormat);
+		$numBindParams++;
+		$this->debugPrint(2, "created bind param $numBindParams for column $columnName");
+	    }
+	    
+	}
+	$this->debugPrint (1, "created $numColumns bind columns");
+
+	$sql . "\n)";
+    };
+}
+
+################################################################################
+
+sub ignoreColumn {
+   <:= $po->contract('ignoreColumn' => {description => 'returns true if this column should be ignored in inserts and updates',
+				      getopts => [
+				                   {name => 'columnName' ,
+						    required => 't',
+						    description => 'name of the column to evaluate',},
+						    {name => 'ignorePrimaryKey',
+						     description  => 'ignore the primary key of the table'},
+						    {name => 'ignoreModificationColumns',
+						     description  => 'ignore modification columns (if they exist).'},
+						   ]}); :>
+    do {
+	( ($ignorePrimaryKey and 
+	   lc($columnName) eq lc($this->getPrimaryKeyName()))
+	  or
+	  ($ignoreModificationColumns and (
+					   (lc($columnName) eq lc($this->getInsertedDateColumnName()))
+					   or
+					   (lc($columnName) eq lc($this->getUpdatedDateColumnName()))
+					   ))
+	  )
+    };
+}
+
+################################################################################
+
+sub genUpdateSQL {
+   <:= $po->contract('genUpdateSQL' => {description => 'generate a bind ready sql string for updating this table with all columns',
+					getopts => [{name => 'dateFormat',
+						     default => 'YYYY-MM-DD HH24:MI:SS',
+						     description => "can be used to specify the date format used in the input"},
+						    {name => "sourceTable",
+						     ref => 'DB::Table',
+						     description => 'truncate this table if set',},
+						    {name => 'ignorePrimaryKey',
+						     description  => 'ignore the primary key of the table'},
+						    {name => 'ignoreModificationColumns',
+						     description  => 'ignore modification columns (if they exist).'},
+						    {name => 'naturalKey',
+						     required => 't',
+						     description => 'natural key of the data set',},]}); :>
+    do {
+	my %columns = %{$this->getColumns()};
+
+ 	my $sql = "update " . $this->getName() . " set \n";
+	my $handle = $this->getHandle();
+
+	my $numColumns =0;
+
+	foreach my $columnName (sort (keys(%columns))) {
+	    $sql .= ($numColumns++ ? ",\n" : "") . 
+		"\t$columnName = " . $handle->bindParam(data => $columns{$columnName},
+							sourceTable => $sourceTable,
+							dateFormat => $dateFormat)
+		unless $this->ignoreColumn(ignorePrimaryKey => $ignorePrimaryKey,
+					   columnName => $columnName,
+					   ignoreModificationColumns => $ignoreModificationColumns);
+	}	
+	$sql .= "\nwhere\t" . $naturalKey . " = ?\n";
+	$sql;
+    };
+}
+
+################################################################################
+
+sub genSelectSQL {
+   <:= $po->contract('genSelectSQL' => {description => 'generate a bind ready sql string for updating this table with all columns',
+					getopts => [
+						    {name => 'dateFormat',
+						     default => 'YYYY-MM-DD HH24:MI:SS',
+						     description => "can be used to specify the date format used in the input"},
+						    ]}); :>
+    do {
+	my %columns = %{$this->getColumns()};
+
+ 	my $sql = "select" ;
+	my $numColumns = 0;
+	my $handle = $this->getHandle();
+
+
+	foreach my $columnName (sort (keys(%columns))) {
+	    $sql .= ($numColumns++ ? ",\n" : "") . 
+		"\t" . $handle->selectParam(data => $columns{$columnName},
+					    dateFormat => $dateFormat);
+	}	
+	$sql .= "\nfrom\t" . $this->getName() . "\n";
+	$sql;
+    };
+}
+
+use Carp qw(cluck);
+
+################################################################################
+
+sub getField {
+   <:= $po->contract('getField' => {description => 'returns a field by name',
+				    getopts => [{name => 'data' ,
+						 required => 't',
+						 description => 'column name to fetch',},]}); :>
+    do {
+	my %columns = %{$this->getColumns()};                                   # list of columns in this table
+	$this->debugPrint (2, "fetching column $data");
+
+#	cluck "I am here";
+
+	$columns{$data} || $columns{lc($data)} || $columns{uc($data)};          # :(  - OK I need to write my own case insensitive hash class I think.
+    };
+}
+
+
+################################################################################
+
+sub modifyPrecision {
+   <:= $po->contract('modifyPrecision' => {description => 'modify the precision of a column',
+					   getopts => [
+						       {name => 'columnName',
+							description => 'name of the column to alter',},
+						       {name => 'precision',
+							description => 'new precision',},
+						   ],
+					   vars => [handle,name]}); :>
+    do {
+	$handle->setPrecision(@_, name => $name);
+    };
+}
+
+
+################################################################################
+
+sub getReferers {
+   <:= $po->contract('getReferers' => {description => 'returns foreign key referers',
+				       vars => [handle,name],}); :>
+    do {
+	$handle->getReferers(tableName => $name);
+    };
+}
+
+
+
+################################################################################
+
+sub getReferrals {
+   <:= $po->contract('getReferrals' => {description => 'returns foreign key referrals',
+					vars => [handle,name],}); :>
+    do {
+	$handle->getReferrals(tableName => $name);
+    };
+}
+
+sub cloneSchema {
+   <:= $po->contract('cloneSchema' => {description => 'take another table object, and replicate its schema',
+					   getopts => [
+						       {name => 'from',
+							description => 'name of the column to alter',},
+					       ],},); :>
+    do {
+	my %fromColumns = %{$from->getColumns()};
+	my %toColumns = %{$this->getColumns()};
+
+	my $handle = $this->getHandle();
+	my $connectString = $this->getName() . "/" . $handle->getUser();
+
+	my $newColumns;
+	
+	foreach my $columnName (sort (keys(%fromColumns))) {
+	    $this->debugPrint(2, "examining $columnName");
+
+	    my $toColumnName = $handle->validColumnName(data => $columnName);
+
+	    if ($toColumns{$toColumnName}) {
+		$this->debugPrint(2, "column $toColumnName exists in " . $connectString);
+	    } else {
+		$this->debugPrint(0, "column $toColumnName does not exist in " . $connectString);
+
+		my $orig = $fromColumns{$columnName};
+		$handle->cloneColumn(table =>, $this,
+				     column => $orig);
+		$newColumns = 1;
+	    }
+	    
+	}
+	$this->_new() if $newColumns; # rebuild table metadata
+    };
+}
+
+1;

@@ -1,0 +1,54 @@
+<@ # -*-perl-*-
+# $m80path = [{ command => "embedperl -embedderChar @" }]
+    use Env qw(filter);
+@><: # -*-perl-*-
+# $m80path = [{ command => embedperl }]
+use Helpers::PerlObject;
+my $po = Helpers::PerlObject->new(name => 'Metadata::Filter::<@=$filter@>',
+                                  isa => 'Metadata::Filter::FieldConverter',
+                                  include => ['Metadata::Compiler::Message',
+                                              'Metadata::Utils'],
+                                  description => q!
+
+Some sample description. 
+
+
+Example:
+
+   use Metadata::Filter::<@=$filter@>;
+   
+   my $filter = new Metadata::Filter::<@=$filter@>( name => '<@=$filter@>', description => 'DESCRIPTION' );
+   ...
+!);
+
+$po->setMembers([ { name => 'member',
+                    description => 'A member.' },
+                  ] );
+
+print $po->dump();
+:>
+
+sub _new {
+    my $this = shift;
+
+    # default values for Name and Description
+    $this->setName( '<@=$filter@>' ) unless $this->getName();
+    $this->setDescription( 'DESCRIPTION' ) unless $this->getDescription();
+
+    $this->setClassMask( 'SomeObjectMask' ) unless $this->getClassMask();
+}
+
+#
+# Use the following sub routine to call $this->setConvertFieldValue() as necessary
+#
+sub __processObject {
+    <:= $po->contract( __processObject => { description => 'Internal method called from FieldConverter BEFORE processing its object',
+                                           getopts => [{ name => 'messages',
+                                                         description => 'The messages array',
+                                                         ref => ARRAY,
+                                                         required => t }] } ) :>
+
+
+    $this->setConvertFieldValue( { fieldname => newValue } );
+}
+

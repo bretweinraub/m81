@@ -1,0 +1,78 @@
+<: #-*- perl -*- # $m80path = [{ command => embedperl, chmod => '+x' }]
+
+
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'DB2Umlet.pl' , 
+                                   description => '',
+                                   include => [DB::DBHandleFactory,
+					       DB::Table,
+					       UMLet::UXFElement,
+					       UMLet::UXFDocument],
+                                   getopts => [
+ 					       { tag => 'module:s',
+                                                 required => 't',
+                                                 description => 'module name to generate',},
+					       ],
+                                   );
+print $ps->dump() . $ps->pod();
+:>
+
+use strict;
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+
+my $rowset = $dbhandle->newRowSet(sql => "select distinct object_name from $module" . "_objects where object_type = 'TABLE'", lc => 't'); #use lower case columns
+
+my $x=0;
+my @uxfs;
+
+while ($rowset->next) {
+    $x++;
+    my $object_name = $rowset->item('OBJECT_NAME');
+    my $table = $dbhandle->newTable(name => $object_name);
+    my $txt;
+    $txt = lc($object_name) . "\n--\n";
+
+    my (%cols) = (%{$table->getColumns()});
+
+    my @keys = keys(%cols);
+
+    map { 
+	my $column = $cols{$_};
+	
+	$txt .= $_ . " " .  $dbhandle->getTypeAsText(data => $column, full => 't') . "\n"
+	    if (ref ($column ) =~ /DB::FieldMetaData/);
+    } (keys(%cols));
+
+    push(@uxfs, UMLet::UXFElement->new(type => 'com.umlet.element.base.Class',
+				       x => $x * 20,
+				       y => $x * 20,
+				       h => $#keys * 15,
+				       w => 100,
+				       text => $txt,
+				       ));
+}    
+
+print Dumper(@uxfs);
+
+
+my $UXFDocument = UMLet::UXFDocument->new( filename => "test.uxf",
+					   );
+
+$UXFDocument->setElements(\@uxfs);
+
+print Dumper($UXFDocument);
+
+$UXFDocument->dump();
+
+
+# }
+
+
+#for (my $ndx = 0; $ndx  < $results{rows}; $ndx++) {
+#    map {
+#	eval '$main::' . $_ . ' = $results{' . $_ . '}[$ndx]';
+#    } (keys (%results));
+#}
+ 
+cleanup 0; 

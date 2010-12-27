@@ -1,0 +1,55 @@
+<: 
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Newable",
+				   include => ['Helpers::PerlScript',
+					       'Getopt::Long'],
+				   example =>
+q[
+     new Newable (name => "Interface Module",
+		  callSignature => 'docmd("m80 --execute expandTemplate.sh -m $module -t $TOP/templates/interfaceModule.tmpl.m80")',
+		  getopts => [{tag => 'module',
+			       variable => '$module',
+			       description => 'Name of the new interface module'}]);
+],
+				   description => "A Newable is anything that can be 'newed' ; that is a templated something (as in files)."); 
+
+$po->setMembers([{ name => "name", required => 1,
+		   description => "name of this newable",},
+		 { name => "callSignature", required => 1,
+		   description => "the call signature for this Newable; some metadata about how to create such a thing" },
+		 { name => "getopts", 
+		   description => "getopts for this newable"}, 
+		 { name => "description",
+		   required => 1,
+		   description => "hopefully meaningful description of this Newable",},
+		 ]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+sub getGetoptsStatement
+{
+<:= $po->contract("getGetoptsStatement" => { description => 'returns a B<Getopts::Long> code block that validates the getopts class variable for this object', getopts => [] }); :>
+
+    my $dummy = Helpers::PerlScript->new(name => "_dummy",
+					 description => "dummy",
+					 getopts => $this->getGetopts());
+
+    return $dummy->_getopts();
+}
+
+=pod
+
+=head1 SEE ALSO
+
+B<portalPerfFunc.sh>
+B<New.pl>
+B<PerlScript.pm>
+
+=cut

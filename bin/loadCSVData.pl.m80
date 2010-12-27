@@ -1,0 +1,45 @@
+<: #-*- perl -*-
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+use strict refs;
+
+my $ps = Helpers::PerlScript->new( name => 'loadCSVData.pl' , 
+                                   description => 'take a CSV file and load a database table with the data.',
+                                   include => [CSV::CSVDocument,
+					       DB::DBHandleFactory,],
+                                   getopts => [{tag => 'file:s',
+						description => 'table to analyze',},
+					       {tag => 'aggressive',
+						description => 'aggressively shorten DB field names',},						
+					       {tag => 'purge',
+						description => 'purge the table before loading',},
+					       {tag => 'prefix:s',
+						description => 'use a generated prefixed table name based on this prefix',},],);
+print $ps->dump(); print $ps->pod();
+:>
+
+################################################################################
+
+do {
+    my $CSVDocument = new CSV::CSVDocument(filename => $file, 
+					   aggressive => $aggressive,
+					   debug => $debug, 
+					   mergeText => '\r\n',);
+
+    my $dbhandle = DB::DBHandleFactory::newDBHandle();
+    my $dbType = $dbhandle->getDBType();
+    
+    $file=~ s/\.csv//g;
+    $file=~ s/.*\///g;
+
+    my @dbtypes = split(/:/,$connectstring);
+    
+
+    my $rc = $CSVDocument->loadDB(dbh => $dbhandle->getDbh(),
+				  tableName => $prefix . $file,
+				  dbType => $dbtypes[1],
+				  purge => $purge);
+    cleanup $rc
+};
+
+cleanup 0; # "

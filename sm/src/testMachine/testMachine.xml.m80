@@ -1,0 +1,18 @@
+<!-- $m80path = [{command => "embedperl"}] -*-xml-* --> 
+
+<ChainGang name="$(env.M80_BDF)" 
+	   wwwroot="/var/www/html/$(env.M80_BDF)/taskData"
+	   urlbase="/$(env.M80_BDF)/taskData">
+
+  <ChainDB username="$(env.AutomationServerUser)" 
+	   password="$(env.AutomationServerPasswd)" 
+	   port="$(env.AutomationServerPort)"
+	   host="$(env.AutomationServerHost)"
+	   sid="$(env.AutomationServerSID)"/>
+
+  <:- testMachineTasks.xml :> 
+  <:- otherTestMachine.xml :>
+  <:- scopeTest.xml :>
+  <:- netConfigParent.xml :>
+  <:- depend.xml :>
+</ChainGang>

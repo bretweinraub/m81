@@ -1,0 +1,106 @@
+m4_define(`SHELL',/bin/bash)m4_dnl ` -*-shell-script-*-
+m4_include(shell/shellScripts.m4)m4_dnl
+# $m80path = [{command => "m4", chmod => "+x" }]
+shell_load_functions(printmsg,cleanup,require,docmd,sshcommand,docmdqi)
+shell_exit_handler
+DIRECTORY=$(pwd)
+shell_getopt((d, DIRECTORY),(u,DEPLOY_USER),(h,DEPLOY_HOST),(D,DEPLOY_DIR),(-x,setx))
+m4_changequote(!*!,*!*)
+
+require DEPLOY_USER
+require DEPLOY_HOST
+require DEPLOY_DIR
+
+if [ -n "${setx}" ]; then
+    set -x
+fi
+
+if [ -n "${DIRECTORY}" ]; then
+    docmd cd ${DIRECTORY}
+fi
+
+#
+# XXX: shouldn't this be "make clean all"?
+#
+
+uname=$(uname)
+
+if [ $uname = "Linux" ]; then
+    printmsg determining if SMP
+    mpstat -P ALL >& /dev/null
+    if [ $? -eq 0 ]; then
+	threads=`expr $(mpstat -P ALL |wc -l) - 4`
+	threadArg=-j${threads}
+    else
+	printmsg can\'t seem to find an operable mpstat on your system, skipping
+    fi
+fi
+
+runningBuild=false
+if [ -f Makefile ]; then
+    buildTool=$(eval echo \$${THIS}_build_TOOL)
+    if test -n "$buildTool" -a "$buildTool" != "make"; then
+        echo "Found build tool $buildTool .. attempting to build"
+        runningBuild=true
+        docmd $buildTool
+    else
+        docmd make all $threadArg
+    fi
+    docmdqi make sm-deploy-extras
+fi
+
+if [ -f build.xml ]; then
+    docmd ant
+fi
+
+if [ -f s/Makefile ]; then
+    docmd make -C s 
+fi
+
+if [ -f t/Makefile ]; then
+    docmd make -C t
+fi
+
+printmsg calculating exclusions
+find . | grep \~ > $TMPFILE.exclude
+
+# the cd is necessary to make sure that the p4 command happens on a directory
+# that exists in p4. The downside is that it scopes the change number to the 
+# module directory. The upside is that we can write a tool that will sync to
+# the headrevision in all modules - making it an easy command to run.
+#if test "$THIS" != 'TOOLS_STAGE' -a "$THIS" != 'SI_TOOLS_STAGE'; then
+#
+# tools stage is now in bunkerhill -bdw
+
+if [ -z "${SUPPRESS_P4_DATA}" ]; then
+    printmsg "Checking p4 for module CL numbers"
+    files=$(cd $deploy_PATH && p4 files ... | head)
+#    printmsg "finished checking p4 files in $deploy_PATH"
+
+    if [ -n "$files" ]; then
+	(cd $deploy_PATH && p4 changes -m 1 ... | cut -d' ' -f2) > $deploy_PATH/.headrevision
+    else 
+	printmsg no p4 data for this modules ... no manifest will be generated
+    fi
+else
+    printmsg WARNING: p4 data for this module suppressed as SUPPRESS_P4_DATA flag is set
+fi
+
+TAR=${gnu_tar:-tar}
+
+printmsg pushing to deploy directories
+tar cvXf $TMPFILE.exclude - . | $SSHCOMMAND $SSH_EXTRAS -l ${DEPLOY_USER} ${DEPLOY_HOST} '(mkdir -p '${DEPLOY_DIR}' && cd '${DEPLOY_DIR}' && '${TAR}' xvf -)'
+RC=$?
+if test $RC -ne 0; then
+    cleanup $RC Failed to deploy
+fi
+
+#
+# if a build exists, then overwrite the previously deployed bits with the built bits.
+# 
+#
+if test -d ./build && $runningBuild; then
+    docmd cd ./build
+    tar cvXf $TMPFILE.exclude - . | $SSHCOMMAND $SSH_EXTRAS -l ${DEPLOY_USER} ${DEPLOY_HOST} '(mkdir -p '${DEPLOY_DIR}' && cd '${DEPLOY_DIR}' && '${TAR}' xvf -)'
+fi
+cleanup $?

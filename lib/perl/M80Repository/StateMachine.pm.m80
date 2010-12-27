@@ -1,0 +1,89 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "M80Repository::StateMachine",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+    my $StateMachine = $StateMachine->new();   # stub example .... expand
+],
+				   description => 'StateMachine description; stub description please expand');
+
+$po->setMembers([
+#                 {name => "filename", 
+#		  type => "string", 
+#		  required => 1,
+#		  format => '([\/\w\d]+)\.uxf',
+#		  description => "Name of the document to generate"},
+#                 {name => "elements",
+#                  ref => 'ARRAY',
+#                  description => "Array of UXFElement objects in this document"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+    use Exporter;
+
+no strict ;
+@ISA = qw(Exporter);
+@EXPORT = qw(addOnControllerModule);
+use strict ;
+
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+sub automator_module_path {
+    my ($mdtarget, $subdir) = @_;
+    my $o = '';
+    if ($ENV{DEV}) {
+	$o .= 'append_variable(PATH,":"m80var(' . $mdtarget . '_deploy_PATH)' . ($subdir ? "/$subdir" : '') . ")\n";
+	$o .= 'append_variable(PATH,":"m80var(' . $mdtarget . '_DEPLOY_DIR)/' . ($subdir ? "/$subdir" : '') . ")\n";
+    } else {
+	$o .= 'append_variable(PATH,":"m80var(' . $mdtarget . '_DEPLOY_DIR)' . ($subdir ? "/$subdir" : '') . ")\n";
+	$o .= 'append_variable(PATH,":"m80var(' . $mdtarget . '_deploy_PATH)' . ($subdir ? "/$subdir" : '') . ")\n";
+    }
+    return $o;
+}
+
+
+
+################################################################################
+
+sub addOnControllerModule {
+    <:= $po->contract('addOnControllerModule' => {description => 'generates an add on controller module specification',
+						  static => 1,
+						  getopts => [
+						  {name => 'name' ,
+						   required => 't',
+						   description => 'name of new entity',},
+						  {name => 'deployedName' ,
+						   description => 'deployedName',},
+						  {name => 'controllerName' ,
+						   required => 't',
+						   description => 'name of CONTROLLER to tack onto',},
+						  {name => 'targets' ,
+						   required => 't',
+						   ref => ARRAY,
+						   description => 'targets to generate for new entity',},
+						   ]}); :> 
+    do {
+	my $targetlist;
+	for my $target (@{$targets}) {
+	    $targetlist .= "($target->{name},$target->{source},$target->{tool}),";
+	}
+	$targetlist =~ s/,$//; $targetlist = "($targetlist)";
+	my $o = "deployableModule([$name],m80var(".$controllerName."_DEPLOY_USER),m80var(".$controllerName."_DEPLOY_HOST),/data/deployments/m80var(M80_BDF),$deployedName,$targetlist)\n";
+	$o .= automator_module_path($name);
+	return $o;
+
+    };
+}
+

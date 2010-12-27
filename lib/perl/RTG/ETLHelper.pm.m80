@@ -1,0 +1,185 @@
+<: #-*- perl -*- # $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name =>    "RTG::ETLHelper",
+			           isa =>     'DB::ETLHelper',
+                                   include => ['Storable qw(dclone)',
+					       DB::Utils,
+					       DB::FieldMetaData],
+                                   example =>
+q[
+  my $RTGHelper = RTG::ETLHelper->new();
+  my $router_tableName = $RTGHelper->getRouterTableName();
+  my $targetHandle = $RTGHelper->getTargetHandle();
+  my $routerData = $targetHandle->newRowSet(sql => "select * from $router_tableName", lc => 't');
+],
+				   description => 'RTG::ETLHelper description; stub description please expand');
+
+$po->setMembers([{name => "routerTableName",
+                  description => "name of the router table in the source RTG schema"},]); 
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do {
+#
+# Look for the router table name
+#
+	my $router_targetRD = $ENV{router_targetRD};
+	Confess "cannot find rtg router target resource descriptor in metadata"
+	    unless $router_targetRD;
+
+	my $router_tableName = $ENV{$router_targetRD . "_tableName"};
+	Confess "cannot find rtg router table name in metadata"
+	    unless $router_targetRD;
+
+	$this->setRouterTableName($router_tableName);
+    };
+}
+
+################################################################################
+
+sub createETLTables {
+   <:= $po->contract('createETLTables' => {description => 'create a staging table for this data feed',
+					   getopts => []}); :>
+    do {
+	my $sourceTable = $this->getSourceTable();
+	my %columns = %{$sourceTable->getColumns()};
+
+	# add in a column for the router id
+	$columns{rid} = DB::FieldMetaData->new(name => "rid",
+					       type => DB::FieldMetaData::getDataType(data => "INTEGER"),
+					       precision => 10,
+					       handle => $this->getSourceHandle(),
+					       scale => 0);
+	$sourceTable->setColumns(\%columns);
+
+	unless ($this->getNoCreate()) {
+	    foreach my $tableName ($this->getTargetTableName(), $this->getStageTableName()) {
+		# stage tables is not an m80 table
+		createTables(dbhandle => $this->getTargetHandle(), 
+			     sourceTable => $sourceTable, 
+			     prefixDateColumns => "stage_",
+			     suppressM80 => (($tableName eq $this->getStageTableName()) ? 1 : undef),
+			     columnNameTranslators => $this->getColumnNameTranslators(),
+			     targetTableNames => [$tableName]);
+	    }
+	}
+   
+    };
+}
+
+################################################################################
+
+sub getMaxDate {
+   <:= $po->contract('getMaxDate' => {description => '
+Returns the maximum date of the currently loaded data.  Used to filter the new rows brought over from the RTG database.',
+					  getopts => [{name => 'rid' ,
+						       required => 't',
+						       description => 'router id',},],
+					  vars => ['targetHandle'],
+				      }); :>
+    do {
+	my $rowSet = $targetHandle->newRowSet(sql => "select " . $targetHandle->dateSelector(data => "max(dtime)") . 
+					      " maxDate from " . $this->getTargetTableName() . " where rid = $rid");
+
+	$rowSet->next();
+	my $maxDate = $rowSet->item("MAXDATE"); # XXX this is nasty oracle specific nonesense - the RowSet class should be dealing with this.
+
+	$maxDate;
+    };
+}
+
+
+################################################################################
+
+sub generateDayQuery {
+   <:= $po->contract('generateDayQuery' => {description => 'based on timestamps in both the source and destination tables, generates a SQL query to fetch an additional day of data',
+					    getopts => [{name => 'tableName',
+							 required => 1,
+							 description => 'table name to be polling data from',},
+							{name => 'rid',
+							 required => 1,
+							 description => 'router id for this query ',},
+							{name => 'numDays',
+							 default => 1,
+							 description => 'number of days to extract from RTG at a time, defaults to 1',},
+							{name => 'sourceMax',
+							 description => 'maximum date of data in the source table',},
+							{name => 'sourceMin',
+							 description => 'minimum date of data in the source table',},
+							{name => 'targetMax',
+							 description => 'maximum date of data in the target table',},
+							]}); :>
+    do {
+	$this->debugPrint(0, "dates for $rid: sourceMin: $sourceMin ; sourceMax : $sourceMax ; targetMax : $targetMax");
+
+	my $sql = "select $tableName.*, $rid rid from $tableName where dtime";
+
+	if ($targetMax) {
+	    $sql .= "> '$targetMax' and dtime <= DATE_ADD('$targetMax', INTERVAL $numDays day)";
+	} else {
+	    $sourceMin =~ s/(\d\d\d\d-\d\d-\d\d).*/$1/;
+	    
+	    $sql .= " >= '$sourceMin 00:00:00' and dtime < '$sourceMin 23:59:59'";
+	    $this->debugPrint (0, "$sql");
+	    return $sql;
+	}
+    };
+}
+
+################################################################################
+
+sub fetchMonths {
+   <:= $po->contract('fetchMonths' => {description => '
+Gets a list of each month in a data table.  Defaults to the stage table name
+if not passed in in the method call.
+
+Returns an object of type DB::RowSet
+
+',
+				      getopts => [
+				                   {name => 'tableName' ,
+						    description => 'tableName to fetch months from',},
+						   ]}); :>
+    do {
+	$tableName = $this->getStageTableName()
+	    unless $tableName;
+
+	my $RowSet = $this->getTargetHandle()->newRowSet(sql => "select distinct to_char(dtime, 'YYYY-MM') month from $tableName order by month");
+	my @months;
+	while($RowSet->next()) {
+	    push (@months, $RowSet->item("MONTH"));
+	}
+	\@months;
+    };
+}
+
+################################################################################
+
+sub createMonthlyTables {
+   <:= $po->contract('createMonthlyTables' => {description => 'looks at the data in the staging table.  Validates or Creates a monthly table for each month in the staged data',
+					       getopts => [{name => 'truncate',
+							    description => 'truncate the destination tables.  This is *EXTREMELY* dangerous should only used if you know what you are doing',},],
+					       vars => [columnNameTranslators,
+							routerTableName, 
+							stageTable, 
+							targetHandle, 
+							targetTableName, 
+							targetTable,]}); :>
+    do {
+	my @months;
+	foreach my $month (@{$this->fetchMonths()}) {
+	    $month =~ s/-/_/g;
+	    push (@months, $targetTableName . "_" . $month);
+	}
+
+	createTables(dbhandle => $targetHandle,
+		     truncate => $truncate,
+		     sourceTable => $stageTable, 
+		     prefixDateColumns => $routerTableName . "_",
+		     columnNameTranslators => $columnNameTranslators,
+		     targetTableNames => \@months);
+    };
+}

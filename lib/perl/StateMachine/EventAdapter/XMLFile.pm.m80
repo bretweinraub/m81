@@ -1,0 +1,74 @@
+<: #-*- perl -*-
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "StateMachine::EventAdapter::XMLFile",
+			           isa => '',
+                                   include => ["StateMachine::EventAdapter::Interface"],
+                                   example =>
+q[
+    my $XMLFile = $XMLFile->new();   # stub example .... expand
+],
+				   description => 'Wrapper object for the StateMachine Interface XML Description ');
+
+$po->setMembers([
+                 {name => "filename", 
+		  type => "string", 
+		  required => 1,
+		  description => "Path to the file representing this StateMachineInterface XML information"},
+                 {name => "filetype",
+                  description => "one of (xml|perl)"},
+                 {name => "xml",
+                  ref => HASH,
+                  description => "the converted XML in a hash reference"},
+		 {name => "interfaces",
+		  ref => HASH,
+		  description => "hash table of all interface references"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    my $XML1; 
+
+    printmsg "loading " . $this->getFilename();
+    
+    my $filename = $this->getFilename();
+    
+    my $data = `cat $filename`;
+
+    eval $data;
+
+    $this->setXml($XML1);
+     
+    my @interfaces = @{$XML1->{interfaces}[0]->{interface}};
+    
+    my %interfaces;
+    
+    foreach my $interface (@interfaces) {
+	$interfaces{$interface->{module}} = []
+	    unless $interfaces{$interface->{module}};
+        push (@{$interfaces{$interface->{module}}}, StateMachine::EventAdapter::Interface->new (xmlhash => $interface));
+    }
+    
+    $this->setInterfaces(\%interfaces);
+}
+
+sub getInterfaceByName {
+    <:= $po->contract('getInterfaceByName' => {description => "the interface to fetch by name",
+					       getopts => [{name => "interface",
+							    required => 1,
+							    description => "the name of the interface to fetch"}],}); :>
+
+    printmsg "looking for interface $interface";
+    
+    my $ret = $this->getInterfaces()->{$interface};
+    
+    Confess "XMLFile->getInterfaceByName(): cannot find interface $interface in file " . $this->getFilename unless 
+        defined $ret;
+    
+    $ret;
+}

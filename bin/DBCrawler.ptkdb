@@ -1,0 +1,47 @@
+$files = {
+           '_</home/bret/dev/m81/bin/DBCrawler.pl' => [
+                                                        {
+                                                          'expr' => undef,
+                                                          'value' => '1',
+                                                          'text' => '    $crawler = $crawlerClass->new(recordsToCrawl => \\@recordsToCrawl,
+',
+                                                          'fname' => '/home/bret/dev/m81/bin/DBCrawler.pl',
+                                                          'type' => 'user',
+                                                          'line' => '280'
+                                                        }
+                                                      ],
+           '_</home/bret/dev/m81/lib/perl/Crawler/SolarWindsNode.pm' => [
+                                                                          {
+                                                                            'expr' => undef,
+                                                                            'value' => '1',
+                                                                            'text' => '    eval {Crawler::SolarWindsNode::__new($this,%args);};
+',
+                                                                            'fname' => '/home/bret/dev/m81/lib/perl/Crawler/SolarWindsNode.pm',
+                                                                            'type' => 'user',
+                                                                            'line' => '152'
+                                                                          }
+                                                                        ],
+           '_</home/bret/dev/m81/lib/perl/Crawler/CrawlerBase.pm' => [
+                                                                       {
+                                                                         'expr' => undef,
+                                                                         'value' => '1',
+                                                                         'text' => '    eval {Crawler::CrawlerBase::__new($this,%args);};
+',
+                                                                         'fname' => '/home/bret/dev/m81/lib/perl/Crawler/CrawlerBase.pm',
+                                                                         'type' => 'user',
+                                                                         'line' => '183'
+                                                                       },
+                                                                       {
+                                                                         'expr' => undef,
+                                                                         'value' => '1',
+                                                                         'text' => '	my $loginURL = $this->getLoginURL();
+',
+                                                                         'fname' => '/home/bret/dev/m81/lib/perl/Crawler/CrawlerBase.pm',
+                                                                         'type' => 'user',
+                                                                         'line' => '695'
+                                                                       }
+                                                                     ]
+         };
+$expr_list = [];
+$eval_saved_text = undef;
+$main_win_geometry = '1255x996+0+6';

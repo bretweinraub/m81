@@ -1,0 +1,156 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "WLS::LogUtils",
+			           isa => '',
+                                   include => ['DB::RowSet',
+					       'FileHandle'],
+                                   example =>
+q[
+
+  #
+  # Accessing the logs for a managed server:
+  #
+
+  my $dbhandle = DB::OracleHandle->new(namespace => "CONTROLLER");   # You need a DB handle to derive a serverName from the task mapper.
+
+  my $WLSLogManager = new WLS::LogUtils;                                        
+
+  $WLSLogManager->deriveServerNameFromMapper (dbhandle => $dbhandle, # derives WLS server name from this task_id - useful for clusters
+					      task_id => $task_id);
+
+  my $FileHandle = $WLSLogManager->openServerOutLog(logNumber => 1); # opens the STDOUT file for this server.
+
+  # 
+  # You can also open any relative path with in the tlogs or wlogs:
+  #
+
+  my $LRReportFH = $WLSLogManager->openWlogFile(relativePath => "LRLogs/results/Perf_Report1.html");
+  
+  #
+  # The Filehandle objects returned can be used like any <FILEHANDLE>
+  #
+
+  while ($line = <$LRReportFH>) {
+      print $line;
+  }
+
+],
+				   description => 'Utilites for working with "wlogs" and "tlogs" files.  These tools are really designed to run in the
+task context of the test you are working with, although you can set things like M80_BDF and master_task_id in the object constructor.  But at the very
+least you must be on the box which the logs are hosted.
+
+');
+
+$po->setMembers([
+		 {name => "master_task_id",
+		  default => '$ENV{master_task_id}',
+		  description => "master_task_id of this test - can be overriden for extreme debugging situations",},
+                 {name => "serverName", 
+		  type => "string", 
+		  description => "Name of this WLS server - can be derived from a task mapper using deriveServerNameFromMapper() - see the documentation for that method"},
+		 {name => "logRoot",
+		  default => "/var/www/html",
+		  description => "Root directory for all logs"},
+		 {name => "M80_BDF",
+		  default => '$ENV{M80_BDF}',
+		  description => 'M80 BDF (Build Descriptor File) descriptor for the environment that generated these logs',},
+		 {name => "wlogDirectory",
+		  description => 'the path to the wlogs directory'},
+		 {name => "tlogDirectory",
+		  description => 'the path to the tlogs directory'},
+		 ]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    $this->setMaster_task_id( $ENV{wsrp_master_task_id} ) if $ENV{wsrp_master_task_id};
+    $this->setWlogDirectory($this->getLogRoot() . "/" . $this->getM80_BDF() . "/wlogs/" . $this->getMaster_task_id());
+    $this->setTlogDirectory($this->getLogRoot() . "/" . $this->getM80_BDF() . "/tlogs/" . $this->getMaster_task_id());
+    Confess "cannot call WLS::LogUtils constructor without master_task_id defined"
+	unless $this->getMaster_task_id();
+}
+
+sub deriveServerNameFromMapper {
+   <:= $po->contract('deriveServerNameFromMapper' => {description => "convert a task mapper to the server name and then set the internal serverName field to the derived value.  Returns the derived value as well.",
+						      getopts => [ { name => 'dbhandle',
+								     variable => '$dbhandle',
+								     required => t,
+								     description => 'DB::Handle to your db' }, 
+								   { name  => 'task_id',
+								     variable => '$task_id',
+								     required => t,
+								     description => 'task_id - required'},
+								   { name => 'verbose',
+								     variable => '$verbose',
+								     description => 'set verbose SQL statements'},
+								   ] } ) :>
+
+   do {
+       printmsg "(LogUtils::deriveServerNameFromMapper) deriving server name from your task mapper based on -mapper command line argument";
+       Confess "cannot use -mapper unless \$task_id is set" unless $task_id;
+       my %results = %{(DB::RowSet->new(dbh => $dbhandle->getDbh(),
+					verbose => $verbose,
+					sql => "select mapper from task where task_id = $task_id"))->getResults()};
+
+       my ($mapper, $serverName);
+       $mapper = $serverName = $results{MAPPER}[0];
+       $serverName =~ s/(^[a-z])|(\/)|([^0-9A-Za-z])//g;                           # takes something like s/managedServer2_// and converts to managedServer2
+       printmsg "(LogUtils::deriveServerNameFromMapper) derived server name of $serverName from $mapper";
+       printmsg "(LogUtils::deriveServerNameFromMapper) WARNING: no server name could be derived from mapper" unless $serverName;
+       return $this->setServerName($serverName);
+   }
+}
+
+sub _openFileHandle {
+    <:= $po->contract ('_openFileHandle' =>  {description => "generalized routine that returns a filehandle opened on a file, or throws a stack trace if the file cannot be opened",
+					      getopts => [{ name => "file2open",
+							    required => 't',
+							    description => "the file to open"}]}); :>
+ 
+  do {
+      my $fh = 	  my $fh = new FileHandle;
+      $fh->open ("< $file2open")
+	  or Confess "cannot open $file2open: $@";
+      printmsg "WLS::LogUtils successfully opened $file2open";
+      return $fh;
+  }								
+}
+
+sub openServerOutLog {
+    <:= $po->contract('openServerOutLog' => {description => "returns a filehandle to the server log",
+					  getopts => [ 
+						       { name => "logNumber", # 1 -> STDOUT, 2 -> STDERR
+							 required => 't',
+							 description => "1 or 2",},
+						       ]
+						       }); :>
+
+    my ($wlogsDir, $serverName, $log2open);
+    $wlogsDir = $this->getWlogDirectory()
+	or Confess "Logic error ... no wlogDirectory was derived";
+
+    $serverName = $this->getServerName() or
+	Confess "openServerLog() cannot run without serverName member variable set.  Use deriveServerNameFromMapper() or setServerName() to set this variable";
+
+    $log2open = $this->getWlogDirectory() . "/$serverName/$serverName.$logNumber";
+
+    my $fh = $this->_openFileHandle(file2open => $log2open);
+    return $fh;
+}
+
+sub openWlogFile {
+    <:= $po->contract ('openWlogFile' => {description => "returns a filehandle opened against any generic Wlog file",
+					  getopts => [{name => "relativePath",
+						       description => "relative path underneath the wlogs directory",
+						       required => 't',},],}); :>
+    do {
+	return $this->_openFileHandle(file2open => $this->getWlogDirectory() . "/" . $relativePath);
+    }
+}

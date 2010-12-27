@@ -1,0 +1,22 @@
+<: #-*- perl -*-
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'newSugarModule.pl' , 
+                                   description => 'build a new sugar module',
+                                   include => [],
+                                   getopts => [
+					       { tag => 'sugarDir:s',
+                                                 required => 't',
+                                                 description => 'namespace for this sugar implementation',},
+					       { tag => 'module:s',
+                                                 required => 't',
+                                                 description => 'module name',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+ 
+
+
+cleanup 0; # "

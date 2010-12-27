@@ -1,0 +1,105 @@
+<: #-*- perl -*-  # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'load.pl' , 
+                                   description => '
+Load script for RtgETLImpl module.  Unlikely you would ever call this 
+script directly except as part of task debugging.  See the documentation on the debugging
+chassis for more information on how to do this.',
+                                   include => [RTG::ETLHelper],
+                                   getopts => [{name => 'truncate',
+						description => 'truncate the destination tables.  This is *EXTREMELY* dangerous should only used if you know what you are doing',},],
+                                   );
+print $ps->dump() . $ps->pod();
+:>
+ 
+######################################################################################################################################################
+                                                                                # 
+use strict;                                                                     # SETUP
+                                                                                # 
+######################################################################################################################################################$
+                                                                                # 
+my $RTGHelper = RTG::ETLHelper->new(sourceHandleUnneeded => 1);                 # RTG::Helper loads all the metadata from the environment
+my ($router_tableName,                                                          # string
+    $stageTable,                                                                # DB::Table
+    $stageTableName,                                                            # string
+    $targetTableName,
+    $targetTable,
+    $targetHandle) = ($RTGHelper->getRouterTableName(),                         # DB::Handle
+		      $RTGHelper->getStageTable(),                              # 
+		      $RTGHelper->getStageTableName(),		                # 
+		      $RTGHelper->getTargetTableName(),                         # 
+		      $RTGHelper->getTargetTable(),
+		      $RTGHelper->getTargetHandle());                           # 
+		                                                                # 
+#######################################################################################################################################################
+# 
+my $routerData = $targetHandle->newRowSet(sql => "select distinct rid from $stageTableName", 
+					  lc => 't');
+
+#
+# 0.       Turn off the autocommit function in the target handle. CHECK
+# 1.       loop through each month in the source data. CHECK
+# 1.1      make sure a target table for each month existing in the source table.
+# 2.       Foreach RID
+# 2.1      Check to see if this data has already been committed to the target table.
+# 2.1.1    This should be determined if there is an existing row for this chunk of data in
+#          the non-monthly target table.  If there is, we have this data, as we will
+#          committed it as a single transaction.
+# 2.2      If not already existing, move the data from the RID into the correct month table.
+#          Data may span months.
+
+$targetHandle->setAutoCommit(value => 0);
+$RTGHelper->createMonthlyTables(truncate => $truncate);
+my $StageRowSet = $targetHandle->newRowSet(sql => "select rid, " . 
+					   $targetHandle->dateSelector(data => "max(dtime)") . 
+					   " dtime from $stageTableName group by rid order by rid",lc=>1);
+my $ExistingRowSet = $targetHandle->newRowSet(sql => "select rid, " . 
+					      $targetHandle->dateSelector(data => "max(dtime)") . 
+					      " dtime from $targetTableName group by rid order by rid",lc=>1);
+
+my (%ExistingData, %monthTables);
+
+while($ExistingRowSet->next()) {
+    my ($rid, $dtime) = ($ExistingRowSet->item("RID"), $ExistingRowSet->item("DTIME"));
+    $ExistingData{$rid} = $dtime;
+}
+
+while ($StageRowSet->next()) {
+    my ($rid, $dtime) = ($StageRowSet->item("RID"), $StageRowSet->item("DTIME"));
+    if ($ExistingData{$rid} eq $dtime) {
+	debugPrint(0, "router id $rid will be skipped as $ExistingData{$rid} eq $dtime");
+    } else {
+	debugPrint(0, "loading data for router id $rid as $ExistingData{$rid} eq $dtime");
+
+	# we could probably do this in one query ... XXX
+
+	my $DataMonths = $targetHandle->newRowSet(sql => "select distinct to_char(dtime, 'YYYY_MM') month from $stageTableName where rid = $rid order by month asc",lc=>1);
+
+	while ($DataMonths->next()) {
+	    my $month = $DataMonths->item("MONTH");
+	    $targetHandle->execute(sql => "alter session set nls_date_format = 'yyyy-mm-dd hh24:mi:ss'");
+	    my $DataToLoad = $targetHandle->newRowSet(sql => "select * from $stageTableName where rid = $rid and to_char(dtime, 'YYYY_MM') = '$month'",lc=>1);
+
+	    my $monthTable = $monthTables{$month} ? $monthTables{$month} : $targetHandle->newTable(name => $targetTableName . "_$month");
+	    $monthTables{$month} = $monthTable;
+
+	    eval {
+		$monthTable->Import(data => $DataToLoad->getResults(),
+				    dateFormat => 'YYYY-MM-DD HH24:MI:SS',
+				    sourceTable => $stageTable);
+		$targetHandle->execute(sql => "insert into $targetTableName (rid,dtime) values ($rid," . $targetHandle->dateCreator(data => $dtime) . ")");
+		debugPrint(0, "wrote " . $DataToLoad->getRows() . " rows to $targetTableName");
+	    };
+	    do {
+		$targetHandle->getDbh()->rollback();
+		Confess "$@";
+	    } if "$@";
+	}
+	$targetHandle->getDbh()->commit();
+    }
+}
+
+$targetHandle->getDbh()->disconnect();
+
+cleanup 0; # "

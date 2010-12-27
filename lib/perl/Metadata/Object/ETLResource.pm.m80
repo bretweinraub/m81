@@ -1,0 +1,36 @@
+<: #-*- perl -*- # $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Metadata::Object::ETLResource",
+			           isa => 'Metadata::Object',
+                                   include => [],
+                                   example =>
+q[
+    my $ETLResource = $ETLResource->new();   # stub example .... expand
+],
+				   description => 'ETLResource description; stub description please expand');
+
+$po->setMembers([{name => "type",
+#		  required => 1,
+		  default => "table",
+                  description => "type of source data resource"},
+                 {name => "tableName",
+		  description => "for resource tables or views ; this is the table or view name"},
+                 {name => "naturalKey",
+		  description => "natural key for this resource ... can be a comma separated list"},
+                 {name => "createdField",
+		  description => "if there is a field that marks the time of a created record; specify it here."},
+		 {name => "fieldList",
+		  description => "a list of fields to ETL from this resource",},
+                 {name => "updatedField",
+		  description => "if there is a field that marks the time modified a created record; specify it here."},]); 
+print $po->dump();
+ :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do {
+	$this->setTableName($this->getName())
+	    unless $this->getTableName();
+    };
+}

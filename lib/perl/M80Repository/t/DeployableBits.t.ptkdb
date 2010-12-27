@@ -1,0 +1,25 @@
+$files = {
+           '_</home/bret/dev/m81/lib/perl/M80Repository/DeployableBits.pm' => [
+                                                                                {
+                                                                                  'expr' => undef,
+                                                                                  'value' => '1',
+                                                                                  'text' => '$_allMemberAttributes{name} = {
+',
+                                                                                  'fname' => '/home/bret/dev/m81/lib/perl/M80Repository/DeployableBits.pm',
+                                                                                  'type' => 'user',
+                                                                                  'line' => '80'
+                                                                                },
+                                                                                {
+                                                                                  'expr' => undef,
+                                                                                  'value' => '1',
+                                                                                  'text' => '    \\%_allMemberAttributes;
+',
+                                                                                  'fname' => '/home/bret/dev/m81/lib/perl/M80Repository/DeployableBits.pm',
+                                                                                  'type' => 'user',
+                                                                                  'line' => 160
+                                                                                }
+                                                                              ]
+         };
+$expr_list = [];
+$eval_saved_text = undef;
+$main_win_geometry = '1255x996+0+6';

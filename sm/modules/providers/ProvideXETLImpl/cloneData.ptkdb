@@ -1,0 +1,69 @@
+$files = {
+           '_<./cloneData.pl' => [
+                                   {
+                                     'expr' => undef,
+                                     'value' => '1',
+                                     'text' => '    my $targetTable = 
+',
+                                     'fname' => './cloneData.pl',
+                                     'type' => 'user',
+                                     'line' => '224'
+                                   }
+                                 ],
+           '_</home/bret/dev/m81/lib/perl/DB/DBHandle.pm' => [
+                                                               {
+                                                                 'expr' => undef,
+                                                                 'value' => '1',
+                                                                 'text' => '	$stmt;
+',
+                                                                 'fname' => '/home/bret/dev/m81/lib/perl/DB/DBHandle.pm',
+                                                                 'type' => 'user',
+                                                                 'line' => '1053'
+                                                               }
+                                                             ],
+           '_</home/bret/dev/m81/lib/perl/DB/OracleHandle.pm' => [
+                                                                   {
+                                                                     'expr' => undef,
+                                                                     'value' => '1',
+                                                                     'text' => '	$this->createTable(name => $validName,
+',
+                                                                     'fname' => '/home/bret/dev/m81/lib/perl/DB/OracleHandle.pm',
+                                                                     'type' => 'user',
+                                                                     'line' => '596'
+                                                                   },
+                                                                   {
+                                                                     'expr' => undef,
+                                                                     'value' => '1',
+                                                                     'text' => '		return "NUMBER" . ($full ? "(" . $data->getHandle()->DBIPrecisionToGenericPrecision(data => $length) . ")" : "");
+',
+                                                                     'fname' => '/home/bret/dev/m81/lib/perl/DB/OracleHandle.pm',
+                                                                     'type' => 'user',
+                                                                     'line' => '932'
+                                                                   },
+                                                                   {
+                                                                     'expr' => undef,
+                                                                     'value' => '1',
+                                                                     'text' => '	$this->clone(sourceTable => $sourceTable,
+',
+                                                                     'fname' => '/home/bret/dev/m81/lib/perl/DB/OracleHandle.pm',
+                                                                     'type' => 'user',
+                                                                     'line' => '544'
+                                                                   }
+                                                                 ]
+         };
+$expr_list = [
+               {
+                 'expr' => '%ARGV',
+                 'depth' => -1
+               },
+               {
+                 'expr' => '$columnName',
+                 'depth' => -1
+               },
+               {
+                 'expr' => '$this',
+                 'depth' => -1
+               }
+             ];
+$eval_saved_text = undef;
+$main_win_geometry = '1255x976+0+0';

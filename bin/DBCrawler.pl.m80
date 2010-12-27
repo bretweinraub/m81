@@ -1,0 +1,117 @@
+<: #-*- perl -*- # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'DBCrawler.pl' , 
+                                   description => 'Script to crawl a website based on database records',
+                                   include => [DB::DBHandleFactory,
+					       Crawler::CrawlerRequest],
+                                   getopts => [{ tag => 'config:s',
+						 required => 1,
+						 description => 'config file which describes this crawl.',},
+					       { tag => 'nocrawl',
+						 description => 'don\'t actually crawl anything',},
+					       { tag => 'noskip',
+						 description => 'always crawl regardless of timestamps (dangerous).',},],);
+print $ps->dump() . $ps->pod();
+:>
+
+require "$config"
+    or Confess "cannot load $config";
+
+map {
+    eval '$main::' . $_ . ' = $crawlConfig-> {' . $_ . '}';
+    eval "debugPrint(1, \"using config setting of $_ = \$$_\")";
+} ( keys( %{$crawlConfig} ));
+
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+my %results = %{$dbhandle->getData(sql => "select $columns from $table" . ($whereClause ? " where " . $whereClause : ""))};
+
+my @recordsToCrawl = ();
+
+eval "use $crawlerClass";
+Confess "$@" if $@;
+
+for (my $ndx = 0 ; $ndx < $results{rows} ; $ndx++) {
+    my $file = $crawlDir;
+    eval '$file .= "/" . ' . $crawledFileFMT;
+    Confess "$@" if $@; 
+
+    map { eval '$main::' . $_ . ' = $results{' . $_ . '}[$ndx]' } (keys (%results));
+
+    eval '$main::crawlUrl = ' . $crawlerURL;
+
+    debugPrint(1, "crawlUrl = " . $crawlUrl);
+    
+    Confess "could not derive crawlUrl"
+	unless $crawlUrl;
+
+    my $_recordIdentifier;
+    eval '$_recordIdentifier = ' . $recordIdentifier;
+    debugPrint (1,'$_recordIdentifier = ' . $_recordIdentifier);
+
+    unless ($noskip) {
+	($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,
+	 $atime,$mtime,$ctime,$blksize,$blocks)
+	    = stat($file);
+
+	debugPrint (2,'$main::dbTimestamp = $' . $timestampColumn);
+
+	eval '$main::dbTimestamp = $' . $timestampColumn;
+
+
+	debugPrint (2, '$main::crawlUrl = ' . $crawlerURL);
+	debugPrint (2, "comparing timestamps of $file ($mtime) to record $ndx ($dbTimestamp)");    
+
+	if ($mtime) {
+	    if ($mtime < $dbTimestamp) {
+		debugPrint (1, "file $file ($ndx) seems out of date, adding to crawl list");
+		push (@recordsToCrawl, Crawler::CrawlerRequest->new(file => $file, 
+								    URL => $crawlUrl,
+								    recordIdentifier => $_recordIdentifier,
+								    dataSet => \%results,
+								    dataSetIndex => $ndx));
+	    } else {
+		debugPrint (1, "file $file ($ndx) seems up to date, skipping ($mtime >=  $dbTimestamp)");	    
+	    }
+	} else {
+	    debugPrint (1, "file $file ($ndx) doesn't exist; so adding to crawl list");
+	    push (@recordsToCrawl, Crawler::CrawlerRequest->new(file => $file, 
+								URL => $crawlUrl,
+								recordIdentifier => $_recordIdentifier,
+								dataSet => \%results,
+								dataSetIndex => $ndx));
+	}
+    } else {
+	debugPrint (1, "noskip set, so adding  $file ($ndx)  to crawl list");
+	push (@recordsToCrawl, Crawler::CrawlerRequest->new(file => $file, 
+							    recordIdentifier => $_recordIdentifier,
+							    URL => $crawlUrl,
+							    dataSet => \%results,
+							    dataSetIndex => $ndx));
+    }
+}
+
+eval {
+    $crawler = $crawlerClass->new(recordsToCrawl => \@recordsToCrawl,
+				  username => $username,
+				  password => $password,
+				  loginURL => $loginURL);
+
+    $crawler->crawlAll() unless	$nocrawl;
+};
+
+Confess "$@" if $@;
+
+if ($postProcessorClass) {
+    debugPrint (1, "using postProcessorClass $postProcessorClass");
+    eval "use $postProcessorClass";
+    Confess "$@" if $@;
+    eval {
+	my $postProcessor = $postProcessorClass->new (crawler => $crawler,
+						      dbhandle => $dbhandle);
+	$postProcessor->postProcess();
+    };
+    Confess "$@" if $@;
+}
+
+cleanup 0; 

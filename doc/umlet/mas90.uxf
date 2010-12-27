@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?><umlet_diagram><element><type>com.umlet.element.base.Class</type><coordinates><x>340</x><y>130</y><w>140</w><h>130</h></coordinates><panel_attributes>&lt;&lt;mas90 box&gt;&gt;
+--
+user
+hostname
+mas90 user
+mas90 password
+mas90 ODBC
+m81 lib
+--
+
+--
+</panel_attributes><additional_attributes></additional_attributes></element><element><type>com.umlet.element.base.Relation</type><coordinates><x>210</x><y>170</y><w>150</w><h>40</h></coordinates><panel_attributes>lt=&lt;&lt;-
+m1=1
+m2=1</panel_attributes><additional_attributes>130;20;20;20</additional_attributes></element><element><type>com.umlet.element.base.Relation</type><coordinates><x>210</x><y>30</y><w>150</w><h>40</h></coordinates><panel_attributes>lt=&lt;&lt;-
+m1=0..1
+m2=1</panel_attributes><additional_attributes>130;20;20;20</additional_attributes></element><element><type>com.umlet.element.base.Class</type><coordinates><x>340</x><y>20</y><w>140</w><h>80</h></coordinates><panel_attributes>&lt;&lt;windows slave&gt;&gt;
+--
+user
+hostname
+--
+
+--
+</panel_attributes><additional_attributes></additional_attributes></element><element><type>com.umlet.element.base.Class</type><coordinates><x>20</x><y>20</y><w>210</w><h>250</h></coordinates><panel_attributes>&lt;&lt;mas90&gt;&gt;
+--
+
+--
+
+--
+</panel_attributes><additional_attributes></additional_attributes></element></umlet_diagram>

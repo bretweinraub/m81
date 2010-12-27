@@ -1,0 +1,167 @@
+
+<!-- begin module.xml for testMachine  $m80path = [{command => "embedperl"}]  -->
+
+
+<ChainGang name="$(env.M80_BDF)" 
+	   wwwroot="/var/www/html/$(env.M80_BDF)/taskData"
+	   urlbase="/$(env.M80_BDF)/taskData">
+
+  <ChainDB username="$(env.CONTROLLER_USER)" 
+	   password="$(env.CONTROLLER_PASSWD)" 
+	   port="$(env.CONTROLLER_PORT)"
+	   host="$(env.CONTROLLER_HOST)"
+	   sid="$(env.CONTROLLER_SID)"/>
+
+  <exports>
+    <export value="^PATH"/>
+    <export value="^PERL5LIB"/>
+    <export value="^CONTROLLER"/>
+    <export value="^ORACLE"/>
+  </exports>
+
+  <module name="TEST_CHASSIS"
+	  deployDir="$(env.CONTROLLER_deploy_PATH)/testMachine">
+    <tasks>
+      <task name="parallelTest"
+	    parallelismKey="$(task.name)"
+	    maxParallelism="1">
+	<exports>
+	  <export value="name"/>
+	</exports>
+      </task>
+
+      <task name="restartTest"/>
+
+      <!-- exportTest -->
+      <task name="exportTest">
+	<exports>
+	  <export value="goodValue"/>
+	</exports>
+      </task>
+
+    </tasks>
+    <tasks>
+      <task name="apTest"
+	    maxParallelism="1"/>
+    </tasks>
+    <actions>
+      <action name="sleep"
+              command="sleep $(task.arg1)"/>
+      <action name="exportTest"
+	      command="env">
+	<exports>
+	  <export value="$(task.contextValue)"/>
+	</exports>
+	<transitionMap>
+	  <transition type="returnCode"
+		      value="0" 
+		      code="$thistask->transitionTo(nextaction => q(__SUCCESS__))"/>
+	</transitionMap>
+      </action>
+	      
+
+      <action name="parallelTest"
+	      parallelismKey="$(task.actionKey)"
+	      command="sleep $(task.sleepVal) ; exit $(task.exitVal)">
+	<transitionMap>
+	  <transition type="returnCode"
+		      value="0" 
+		      code="$thistask->transitionTo(nextaction => q(__SUCCESS__))"/>
+	</transitionMap>
+      </action>
+
+      <action name="restartTest"
+	      isTransactional="true"
+	      command="exit 0">
+	<transitionMap>
+	  <transition type="returnCode"
+		      value="0" 
+		      code="$thistask->transitionTo(nextaction => q(__SUCCESS__))"/>
+	</transitionMap>
+      </action>
+
+
+
+  <!-- simple chain (errorTest ~ __SUCCESS__) -->
+  <action name="errorTest"
+	  maxFailures="3"
+			       isTransactional="1"
+	  command="exit 1">
+    <transitionMap>
+      <transition type="returnCode" value="0" code="$thistask->transitionTo(nextaction => __SUCCESS__)"/>
+      <transition type="returnCode" value="\d+" code="$thistask->transitionTo(nextaction => __ERROR__)"/>
+    </transitionMap>
+  </action> 
+
+
+  <!-- simple chain (apTest ~ __SUCCESS__) -->
+  <action name="apTest"
+	  maxFailures="15"
+					  isTransactional="1"
+	  command="sleep $(task.sleepVal) ; exit $(task.exitVal)">
+    <transitionMap>
+      <transition type="returnCode" value="0" code="$thistask->transitionTo(nextaction => __SUCCESS__)"/>
+      <transition type="returnCode" value="\d+" code="$thistask->transitionTo(nextaction => __ERROR__)"/>
+    </transitionMap>
+  </action> 
+
+
+  <!-- simple chain (apTest2 ~ __SUCCESS__) -->
+  <action name="apTest2"
+	  maxFailures="15"
+					  isTransactional="1"
+					  maxParallelism="1"
+	  command="sleep $(task.sleepVal) ; exit $(task.exitVal)">
+    <transitionMap>
+      <transition type="returnCode" value="0" code="$thistask->transitionTo(nextaction => __SUCCESS__)"/>
+      <transition type="returnCode" value="\d+" code="$thistask->transitionTo(nextaction => __ERROR__)"/>
+    </transitionMap>
+  </action> 
+
+
+  <!-- simple chain (parentTest_parent ~ __SUCCESS__) -->
+  <!-- use parent/child formulation for action parentTest_parent -->
+  <action name="parentTest_parent"
+	  command="env ; createTask.pl -task parentTest2_parent -parent $(task.task_id) ; createTask.pl -task parentTest2_parent  -parent $(task.task_id)">
+    <transitionMap>
+      <transition type="parent" value="ALLSUCCESS" code="$thistask->transitionTo(nextaction => __SUCCESS__)"/>
+      <transition type="parent" value="ANYFAIL" code="$thistask->transitionTo(__FAILED__)"/>
+      <transition type="returnCode" value="^0$" code="$thistask->transitionTo(__WAITING__)"/>
+      <transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(__FAILED__))"/>
+    </transitionMap>
+  </action> 
+
+  <!-- simple chain (parentTest ~ __SUCCESS__) -->
+  <action name="parentTest">
+    <transitionMap>
+      <transition type="returnCode" value="^0$" code="$thistask->transitionTo(nextaction => __SUCCESS__)"/>
+      <transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(__FAILED__))"/>
+    </transitionMap>
+  </action> 
+
+
+  <!-- simple chain (parentTest2_parent ~ __SUCCESS__) -->
+  <!-- use parent/child formulation for action parentTest2_parent -->
+  <action name="parentTest2_parent"
+	  command="createTask.pl -task sleep -context arg1=10 -parent $(task.task_id)">
+    <transitionMap>
+      <transition type="parent" value="ALLSUCCESS" code="$thistask->transitionTo(nextaction => __SUCCESS__)"/>
+      <transition type="parent" value="ANYFAIL" code="$thistask->transitionTo(__FAILED__)"/>
+      <transition type="returnCode" value="^0$" code="$thistask->transitionTo(__WAITING__)"/>
+      <transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(__FAILED__))"/>
+    </transitionMap>
+  </action> 
+
+  <!-- simple chain (parentTest2 ~ __SUCCESS__) -->
+  <action name="parentTest2">
+    <transitionMap>
+      <transition type="returnCode" value="^0$" code="$thistask->transitionTo(nextaction => __SUCCESS__)"/>
+      <transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(__FAILED__))"/>
+    </transitionMap>
+  </action> 
+
+
+    </actions>
+  </module>
+</ChainGang>
+

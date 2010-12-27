@@ -1,0 +1,28 @@
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+:>
+
+<!-- begin module.xml for __your_name_here__   -->
+
+<:
+
+
+%moduleActions = (a => [{n => RunETL,
+			 c => 'exit 0',
+			 d => ['StateMachineBase-initialize',
+			       'ETLManager-run'],
+			 t => __SUCCESS__}]);
+
+:>
+
+<tasks>
+<:= moduleHelpers::childTasks(%moduleActions); :>
+</tasks>
+
+<actions>
+<:= moduleHelpers::chainActions(%moduleActions); :>
+</actions>
+
+<!-- end module.xml for __your_name_here__ -->

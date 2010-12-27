@@ -1,0 +1,60 @@
+use Env; 
+
+
+do {
+    @members =  split (/[:\s]+/, $members);
+    foreach $member (@members) {
+	print "        $member => \"\",\n";
+    }
+};
+    print (")->dump;
+],
+				   description => '");
+    print  $object ;print (" description; stub description please expand');
+
+
+\$po->setMembers([
+");
+    
+    do {
+	@members =  split (/[:\s]+/, $members);
+	foreach $member (@members) {
+	    print "        {name => \"$member\",\n";
+	    print "         description  => \"\",},\n";
+	}
+    };print ("]); 
+
+:>
+");
+    print ("<");
+    print (":= \$po->dump(); :>
+
+sub _new {
+    ");
+print ("<");
+print (":= \$po->dumpContract(method => \"_new\"); :>
+}
+
+
+################################################################################
+
+sub dump {
+    ");
+print ("<");
+print (":= \$po->contract('dump' => {description => 'dump the output for the m80 repository',
+				     getopts => [
+						 #{name => 'data' ,
+						 # required => 't',
+						 # description => 'data to process',},
+						 ]}); :>
+						 do {
+						     \$this->SUPER::dump(");
+print ("\@");
+print ("_) . \"m80NewCustomModule([\" . \$this->getName() . \"],((deploy,\" . \$this->getSrcPath() . \",deploy.sh)))\\n\";
+						 };
+}
+
+
+
+");
+print ("");

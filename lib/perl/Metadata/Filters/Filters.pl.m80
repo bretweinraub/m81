@@ -1,0 +1,9 @@
+#-*-perl-*-
+
+#
+# create a db that represents all the classes in this directory.
+#
+
+# $m80path = [{command => embedperl}]
+
+<:- clusterPGgenerator.m80_ :>

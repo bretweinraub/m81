@@ -1,0 +1,66 @@
+<: #-*- perl -*-
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Sugar::CustomField",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+    my $CustomField = $CustomField->new();   # stub example .... expand
+],
+				   description => 'Custom Field to generate for sugar');
+
+$po->setMembers([
+    {name => "sourceKey",
+     required => 1,
+     description => "sourceKey for this custom field"},
+    {name => "targetTable",
+     required => 1,
+     description => "targetTable for this custom field"},
+    {name => "mapDescriptor",
+     required => 1,
+     description => "mapDescriptor for this custom field"},
+    {name => "type",
+     required => 1,
+     description => "type for this custom field"},
+    {name => "sugarKey",
+     required => 1,
+     description => "sugarKey for this custom field"},
+    {name => "alterTableName",
+     required => 1,
+     description => "alterTableName for this custom field"},
+    {name => "alterColumnName",
+     required => 1,
+     description => "alterColumnName for this custom field"},
+    {name => "targetHandle",
+     required => 1,
+     description => "targetHandle for this custom field"},
+    {name => "metaData",
+     required => 1,
+     description => "metaData for this custom field"},
+    {name => "dataType",
+     required => 1,
+     description => "dataType for this custom field"},
+    {name => "dataTypeFull",
+     required => 1,
+     description => "dataTypeFull for this custom field"},
+    {name => "targetKey",
+     required => 1,
+     description => "targetKey for this custom field"},
+    {name => "precision",
+     required => 1,
+     description => "precision for this custom field"},
+    {name => "genSeparator",
+     description => "generate a separator after this field"},
+    {name => "fixedLength",
+     description => "hard coded text field length - overrides derived value",},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}

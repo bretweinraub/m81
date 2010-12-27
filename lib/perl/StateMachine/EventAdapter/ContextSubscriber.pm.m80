@@ -1,0 +1,50 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "StateMachine::EventAdapter::ContextSubscriber",
+			           isa => 'StateMachine::EventAdapter::Subscriber',
+                                   include => ['Utils::FunctionalProgramming'],
+                                   example => q[
+    my $ContextSubscriber = $ContextSubscriber->new();   # stub example .... expand
+                                                ],
+				   description => 'An Object that subscribes to an Interface Provider based on contextual data in that Object');
+
+$po->setMembers([ { name => 'tag',
+                    description => 'The name of a field in a MetaDataObject class. Something like "name" or "ipaddress"' },
+                  { name => 'value',
+                    description => 'The value that the MetaDataObject field should match successfully in order to dispatch an event to this class. This is a regular expression' } 
+                  ]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do {
+	$this->setObjectType($this->getXmlhash()->{object});
+        $this->setTag($this->getXmlhash()->{tag});
+        $this->setValue($this->getXmlhash()->{value});
+	$this->setHint($this->getXmlhash()->{hint}) if $this->getXmlhash()->{hint};
+    };
+
+}
+
+sub getObjects {
+    <:= $po->contract( getObjects => { description => 'Implementation of the StateMachine::EventAdapter::Subscriber interface',
+                      getopts => [ { name => 'allObjects',
+                                     ref => ARRAY,
+                                     description => 'A reference to the @allObjects memory space for the current running StateMachine task' } ] } ) :>
+
+    # now fetch all objects that match
+    return getObjectsByKey( type => $this->getObjectType,                       # implemented in FunctionalProgramming.pm
+                            key  => $this->getTag,
+                            match => $this->getValue,
+                            list => $allObjects );
+}
+
+	    
+

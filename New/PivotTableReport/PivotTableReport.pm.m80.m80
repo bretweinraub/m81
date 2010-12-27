@@ -1,0 +1,123 @@
+<@ # -*- perl -*-
+# $m80path = [{ command => "embedperl -embedderChar @"}]
+
+use Env;
+
+@><: # -*-perl-*-
+# $m80path = [{ command => embedperl }]
+use Helpers::PerlObject;
+my $po = Helpers::PerlObject->new(name => 'Report::<@=$filter@>',
+                                  isa => 'Metadata::Filter::Internal::Parameterized',
+                                  include => ['Metadata::Compiler::Message',
+                                              'Metadata::Utils',
+                                              'ReportingObjects',
+                                              'supportservers',
+                                              'Storable qw(dclone)'],
+                                  description => q!
+
+This will produce a report for a list of runset names. That report will include a
+pivot table that has all the config data for those runs. It will also produce a 
+page in Confluence that has the Excel pivot table attached and some of the configuration
+data for the test documented in that page as well.
+
+PROVIDE A DESCRIPTION
+
+                                  !,
+                                  example => q!
+
+    use Report::<@=$filter@>;
+   
+    my $report = new Report::<@=$filter@>;
+    $report->setTitle('name');
+    $report->setRunSetNames( ['name1', 'name2'] );
+    $report->setConfluenceUser( 'xxx' );
+    $report->setConfluencePassword( 'yyy' );
+    $report->setConfluenceParentPageTitle( 'SomeParentPageTitle' );
+    $report->setExcelMachineName( 'some machine' );
+!);
+
+    $po->setMembers([ { name => 'title',
+                        description => 'The title of the <@=$filter@> report. This will become the Confluence Page title.' },
+
+                      # runSetNames
+                      { name => 'runSetNames',
+                        description => 'The list of study/runset names to be reported on.',
+                        ref => ARRAY },
+
+                      # confluence
+                      { name => 'confluenceUsername',
+                        description => 'a confluence login.' },
+                      { name => 'confluencePassword',
+                        description => 'a confluence login.' },
+                      { name => 'confluenceParentPageTitle',
+                        description => 'Confluence has a hierarchical order to its pages. This is the title of the parent page that this report should be a child of.' },
+
+                      # excel machine
+                      { name => 'excelMachineName',
+                        description => 'The name of an excel machine that has passwordless ssh setup on it. Defaults to usbodell340-1.' }
+
+                      ] );
+
+print $po->dump();
+:>
+
+sub _new {
+    my $this = shift;
+
+    # default values for Name and Description
+    $this->setName( '<@=$filter@>Report' );
+    $this->setDescription( 'A standard <@=$filter@> Report for reporting on a series of runsets.' ) unless $this->getDescription;
+    $this->setConfluenceParentPageTitle( '9.2 Performance Benchmark Studies' ) unless $this->getConfluenceParentPageTitle;
+    $this->setExcelMachineName( 'usbodell340-1' ) unless $this->getExcelMachineName;
+}
+
+
+sub bind {
+<:= $po->contract( bind => {
+    description => 'This function is a callback called from the execute function during Filter application time. Use this function to manipulate allObjects',
+    getopts => [ { name => 'allObjects',
+                   description => 'The allObjects array',
+                   required => t,
+                   ref => ARRAY },
+                 { name => 'messages',
+                   description => 'The messages array',
+                   required => t,
+                   ref => ARRAY },
+                 ]  } ) :>
+
+    my @objects = ();
+
+    {
+        #
+        # ASSERTS
+        # 
+        unless ($this->getConfluenceUsername) {
+            push @$messages, new Metadata::Compiler::Message( name => $this->getName,
+                                                             message => 'Specify the ConfluenceUsername - it is not set by default',
+                                                             level => 'ERROR' );
+        }
+        unless ($this->getConfluencePassword) {
+            push @$messages, new Metadata::Compiler::Message( name => $this->getName,
+                                                             message => 'Specify the ConfluencePassword - it is not set by default',
+                                                             level => 'ERROR' );
+        }
+
+    }
+
+    #
+    # deep clone objects into @allObjects
+    #
+    @objects = grep { defined } @objects;
+    my $clonedObjects = dclone(\@objects);
+    push @$allObjects, @$clonedObjects;
+
+    #
+    # Create a message for each added object.
+    #
+    for my $obj (@objects) {
+        push @$messages, new Metadata::Compiler::Message( name => $this->getName(),
+                                                          message => 'Creating ' . ref($obj) . " Object named '" . ($obj->{name} ? $obj->{name} : "(anonymous)") . "'",
+                                                          level => 'INFO' );
+    }
+
+}

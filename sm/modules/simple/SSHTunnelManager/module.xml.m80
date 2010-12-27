@@ -1,0 +1,41 @@
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+:>
+
+<!-- begin module.xml for __your_name_here__   -->
+
+<:
+
+
+    %moduleActions = (a => [{n => startSSHtunnel,
+			     c => 'exit 0',},
+			    {n => startSSHtunnelwork,
+			     extras => 'isTransactional="1"',
+			     transitions => {'31' => '__ERROR__',
+					     '0' => '__ERROR__',},
+			     t => __SUCCESS__}]);
+
+
+%test  = (a => [{n => test,
+			     c => 'exit 0',},
+			    {n => sleepTest,
+			     extras => 'isTransactional="1"',
+			     transitions => {'31' => '__ERROR__',
+					     '0' => '__ERROR__',},
+			     t => __SUCCESS__}]);
+
+:>
+
+<tasks>
+    <task name="startSSHtunnel"
+	  requiredData="$(task.host) $(task.user)"/>
+</tasks>
+
+<actions>
+<:= moduleHelpers::chainActions(%moduleActions); :>
+<:= moduleHelpers::chainActions(%test); :>
+</actions>
+
+<!-- end module.xml for __your_name_here__ -->

@@ -1,0 +1,70 @@
+<: #-*- perl -*-
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "M80Repository::Base",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+    my $M80Repository::Base = $M80Repository::Base->new();   # stub example .... expand
+],
+				   description => 'M80Repository::Base description; stub description please expand');
+
+$po->setMembers([
+#                 {name => "filename", 
+#		  type => "string", 
+#		  required => 1,
+#		  format => '([\/\w\d]+)\.uxf',
+#		  description => "Name of the document to generate"},
+#                 {name => "elements",
+#                  ref => 'ARRAY',
+#                  description => "Array of UXFElement objects in this document"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+sub define_variable {
+    my ($field,$value) = @_;
+
+    "define_variable([$field],[$value])\n";
+}
+
+
+################################################################################
+
+
+sub dump {
+   <:= $po->contract('dump' => {description => 'unwraps the arguments into a traditional m80 repository model',
+				getopts => [
+#
+# TODO: allow the field list to be passed in.
+#
+				    {name => 'fields' ,
+				     ref => ARRAY,
+				     description => 'list of field names to be unwrapped into the object',},
+				    ]}); :>
+
+    do {
+        my ($caller) = (caller(1))[3];
+        my $name = $this->getName();
+        $caller =~ s/.+?::(.+?)::.*/$1/;
+        $caller =~ s/(.+?)s$/$1/;
+        my $ret = "append_variable_space([$caller" . "s"  . "],[$name])\n";
+        foreach my $field (@{$this->getMembers()}) {
+            $ret .= define_variable($name . "_$field", $this->{$field})
+                if $this->{$field};
+        }
+        $ret .= define_variable($name . "_THIS", $name);
+        $ret;
+    };
+
+}
+
+

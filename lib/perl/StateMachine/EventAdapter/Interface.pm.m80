@@ -1,0 +1,78 @@
+<: #-*- perl -*-
+# $m80path = [{command => "embedperl" }];
+
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "StateMachine::EventAdapter::Interface",
+			           isa => '',
+                                   include => ["StateMachine::EventAdapter::Provider",
+					       "StateMachine::EventAdapter::Event",
+					       ],
+                                   example =>
+q[
+    my $Interface = $Interface->new();   # stub example .... expand
+],
+				   description => 'A State Machine Interface Module');
+
+$po->setMembers([{name => "xmlhash", 
+		  ref => HASH,
+		  required => 1,
+		  description => "The parsed interface block from the XML config file."},
+		 {name => "providers",
+                  ref => HASH,
+                  description => "Table of Provider objects keyed by module name"},
+		 {name => "events",
+		  ref => HASH,
+		  description => "hash table of all StateMachine::EventAdapter::Event objects for this interface"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+
+    my $xml = $this->getXmlhash();
+
+    my @providers = @{$xml->{providers}[0]->{provider}};
+
+    my $providersHash = {};
+
+    foreach my $provider (@providers) {
+	my $Provider = StateMachine::EventAdapter::Provider->new(xmlhash => $provider);
+	$providersHash->{$provider->{module}} = $Provider;
+    }
+
+    $this->setProviders($providersHash);
+
+
+    my $eventHash = {};
+
+    my @events = @{$xml->{events}[0]->{event}};
+
+    foreach my $event (@events) {
+        my $Event = StateMachine::EventAdapter::Event->new (xmlhash => $event,
+							    name => $event->{name},
+							    mapperBase => $event->{mapperBase});
+	$eventHash->{$event->{name}} = $Event;
+    }
+
+    $this->setEvents($eventHash);
+}
+
+sub getEventByName {
+    <:= $po->contract('getEventByName' => {description => "the event to fetch by name",
+					   getopts => [{name => "event",
+							required => 1,
+							description => "the name of the event to fetch"}],}); :>
+
+    printmsg "looking for event $event";
+
+    my $ret = $this->getEvents()->{$event};
+
+    $this->debugPrint (1, "cannot find event $event in XMLFile->getEventByName()") unless 
+        defined $ret;
+    
+    return $ret;
+
+}

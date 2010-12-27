@@ -1,0 +1,24 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'cancelTask.pl' , 
+                                   description => '',
+                                   include => [DB::DBHandleFactory],
+                                   getopts => [
+# 					       { tag => '',
+#                                                 variable => '$',
+#                                                 required => 't',
+#                                                 description => '',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+my %results = %{$dbhandle->getData(sql => "select 1 from dual")};
+ 
+cleanup 0; 

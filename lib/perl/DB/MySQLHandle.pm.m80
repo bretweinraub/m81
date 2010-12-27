@@ -1,0 +1,371 @@
+<: 
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "DB::MySQLHandle",
+				   isa => "DB::DBHandle",
+				   include => ['DBI'],
+				   description => "Wrapper for an MySQL DBIDatabase Handle.");
+
+$po->setMembers([{name => "port", 
+		  format => '\d+',
+		  description => "port for the db instance to connect to"},
+                 {name => "database", 
+		  description => "database for the db instance to connect to"},
+]); 
+:>
+
+<:= $po->dump(); :>
+
+sub _new {
+    <:= $po->dumpContract(method => "_new"); :>
+
+    if ($this->getNamespace()) {
+	$this->setUser($ENV{$this->getNamespace() . "_USER"});
+	$this->setPassword($ENV{$this->getNamespace() . "_PASSWD"});
+	$this->setDatabase($ENV{$this->getNamespace() . "_DATABASE"});
+	$this->setHost($ENV{$this->getNamespace() . "_HOST"});
+	$this->setPort($ENV{$this->getNamespace() . "_PORT"});
+    }
+    Confess "required member variable DATABASE not set" unless $this->getDatabase();
+
+    $this->setConnectString("dbi:mysql:host=" . $this->getHost() . ";database=" . $this->getDatabase() . ";port=" . $this->getPort() );
+    $this->connect();
+}
+
+
+################################################################################
+
+sub SQLAlterString {
+   <:= $po->contract('SQLAlterString' => {description => 'for alter statements, some DBS like MySQL want certain strings in backquoutes',
+					  getopts => [{name => 'data' ,
+						       required => 't',
+						       description => 'data to process',},
+					  ]}); :>
+    do {
+	"`" . $data . "`";
+    };
+}
+
+################################################################################
+
+sub getTypeAsText {
+   <:= $po->contract('getTypeAsText' => {description => 'return the type variable as a text field',
+					 getopts => [{name => 'data' ,
+						      ref => 'DB::FieldMetaData',
+						      required => 't',
+						      description => 'data to process',},
+						     {name => 'full' ,
+						      description => 'return a full SQL create statement worthy string',},
+						     {name => 'fixedLength',
+						      description => 'force column length based on this argument'},
+						     ]}); :>
+    do {
+	my $type = $data->getType();
+	if ($type == 12) {
+	    return "VARCHAR". ($full ? "(" . ($fixedLength ? $fixedLength : $data->getPrecision()) . ")" : "") ;
+	} elsif ($type == 8 or $type == 7) {
+	    return "FLOAT";
+	} elsif ($type == 3) {
+	    return "DECIMAL";
+	} elsif ($type == 93 or $type == 11) {
+	    return "DATETIME";
+	} else {
+	    Confess "field type $type not implemented";
+	}
+    };
+}
+
+
+################################################################################
+
+sub getMDHandle {
+   <:= $po->contract('newHandle' => {description => 'spins off a new DB handle for a different database or schema',
+				      getopts => [
+				                   #{name => 'data' ,
+						   # required => 't',
+						   # description => 'data to process',},
+						   ]}); :>
+    do {
+	return DB::MySQLHandle->new(user => $this->getUser(),
+				    password => $this->getPassword(),
+				    database => "mysql",
+				    host => $this->getHost(),
+				    port => $this->getPort());
+    };
+}
+
+
+################################################################################
+
+sub getDefaultDateFormat {
+   <:= $po->contract('getDefaultDateFormat' => {description => 'returns the default date format for this RDBMS',
+				      getopts => [
+				                   #{name => 'data' ,
+						   # required => 't',
+						   # description => 'data to process',},
+						   ]}); :>
+    do {
+	'YYYY-MM-DD HH24:MI:SS';
+    };
+}
+
+
+################################################################################
+
+sub getSmallDateFormat {
+   <:= $po->contract('getSmallDateFormat' => {description => 'for mysql DATE fields (no time), this is the default date format'}); :>
+    "YYYY-MM-DD";
+}
+
+
+################################################################################
+
+sub stringToDate {
+   <:= $po->contract('stringToDate' => {description => 'convert a date string into SQL ready date format',
+				      getopts => [
+						  {name => 'data' ,
+						   required => 't',
+						   description => 'data to process',},
+						  ]}); :>
+    do {
+	return "\'" . $data . "\'";
+    };
+}
+
+sub fetchPrimaryKeyName {
+   <:= $po->contract('fetchPrimaryKeyName' => {description => 'attempts to derive the primary key of this table based on DB metadata',
+					       getopts => [
+							   {name => "name",
+							    description => "table name to derive",
+							    required =>  1,},
+							   {name => 'required' ,
+							    description => 'require a result ... throw an error if the primary key can\'t be derived',},
+							   ]}); :>
+    do {
+	my %results = %{$this->getData (sql => "
+select	column_name 
+from 	INFORMATION_SCHEMA.key_column_usage 
+where 	constraint_name = 'PRIMARY' 
+and 	lower(TABLE_NAME) = lower('$name')")};
+
+	Confess "multiple column primary keys not supported" . Dumper(%results)
+	    if $results{rows} > 1;
+
+	Confess "no primary key derived"
+	    if $required and $results{rows} < 1;
+
+	$this->debugPrint(1, "primary key derived as " .  $results{column_name}[0]);
+
+	$results{column_name}[0];
+    };
+}
+
+# select column_name from INFORMATION_SCHEMA.key_column_usage where constraint_name =  'PRIMARY' and TABLE_NAME = 'accounts';
+
+
+sub inlineViewModifier {
+   <:= $po->contract('inlineViewModifier' => {description => 'when creating an inline view and naming, it can be required by some RDBMS(like mysql) to use an "as"',
+				      getopts => [
+				                   #{name => 'data' ,
+						   # required => 't',
+						   # description => 'data to process',},
+						   ]}); :>
+    do {
+	" as ";
+    };
+}
+
+################################################################################
+
+sub dateSelector {
+   <:= $po->contract('dateSelector' => {description => 'When selecting a date from this database, produces an  approriate formatting string.',
+					getopts => [
+						    {name => 'data' ,
+						     required => 't',
+						     description => 'data to process',},
+						    ]}); :>
+    do {
+	"$data";
+    };
+}
+
+
+################################################################################
+
+sub tableExists {
+   <:= $po->contract('tableExists' => {description => 'returns true if a table exists.',
+				       getopts => [
+						   {name => 'name' ,
+						    required => 't',
+						    description => 'name to query for',},
+						   ]}); :>
+    do {
+	eval {
+	    $this->execute(sql => "select * from $name LIMIT 1");
+	};
+	if ("$@") {
+	    return 0;
+	} else {
+	    return 1;
+	}
+    };
+}
+
+################################################################################
+
+sub createTable {
+    <:= $po->contract('createTable' => {description => 'generates a database table, maybe with m80 extensions',
+					getopts => [{name => 'name' ,
+						     required => 't',
+						     description => 'table name to create',},
+						    {name => 'columns' ,
+						     required => 't',
+						     ref => HASH,
+						     description => 'hash of column records for the generated table',},
+						    {name => "columnNameTranslators",
+						     description => 'translation description for column names that need to be converted'},
+						    {name => 'prefixDateColumns' ,
+						     description => 'text to prefix to generated data columns',},
+						    {name => "instantiationTable",
+						     description => "do not generate alternate key .... AKA 'instantiation' of an object"},
+						    {name => "noexec",
+						     description => "print but do not execute",},
+						    {name => "drop",
+						     description => "attempt to drop existing objects"},
+						    {name => 'suppressM80',
+						     description => 'don\'t add in the m80 magic columns',},
+						    ]}); :>
+    do {
+	my $sql = "create table $name (\n";
+
+	$suppressM80 = 1;
+
+	$this->debugPrint (1, "creating " . ($suppressM80 ? "non" : "" ) . " m80 table $name");
+
+	# add primary key 
+
+	my $numColumns = 0;
+
+	unless ($suppressM80) {
+	    $sql .= "\t$name" . "_id number(10) not null";
+	    $numColumns++;
+	}
+
+	my %columns = %{$columns};
+
+	foreach my $columnName (keys(%columns)) {
+	    $this->debugPrint (2, "processing column name $columnName");
+	    my $newColumn = $this->getTypeAsText(data => $columns{$columnName},
+						 full => 't');
+	    $this->debugPrint (2, "found $columnName: $newColumn");
+	    $sql .= ($numColumns++ ? ",\n" : "") . 
+		$this->validColumnName(data => $columnName, 
+				       columnNameTranslators => $columnNameTranslators) . "\t\t\t$newColumn";
+	}
+	
+	unless ($suppressM80) {
+	    $sql .= ",\n";
+	    $sql .= $prefixDateColumns . "INSERTED_DT date not null,\n";
+	    $sql .= $prefixDateColumns . "UPDATED_DT date ,\n";
+	    $sql .= "constraint $name" . "_pk primary key ($name" .  "_id)";
+	}
+
+	$sql .= ")";
+
+	$this->debugPrint (0, "preparing to create table $name");
+	$this->debugPrint (2, " sql statement is $sql");
+
+	return if $noexec;
+
+	$this->dropTable(name => "$name") if $drop;
+
+	$this->execute(sql => $sql);
+
+	unless ($suppressM80) {
+	    $this->PLSQLBlock (sql => "drop sequence $name" . "_s",
+			       ignore => ArrayRef(-2289)) if $drop;
+	    $this->PLSQLBlock (sql => "create sequence $name" . "_S increment by 5 start with 1",
+			       ignore => ArrayRef(-955));
+	    $this->createM80Triggers(name => $name,
+				     prefixDateColumns => $prefixDateColumns);
+	}
+	$this->debugPrint (0, "created table $name");
+
+    };
+}
+
+
+################################################################################
+
+sub maxColumnLength {
+   <:= $po->contract('maxColumnLength' => {description => 'returns the maximum column length for this DBHandle',
+					   getopts => []}); :>
+    50;
+}
+
+################################################################################
+
+sub getDateData {
+   <:= $po->contract('getDateData' => {description => 'localizes date data from a table based on a format string',
+				       getopts => [{name => 'table' ,
+						    required => 't',
+						    description => 'table to process',},
+						   {name => 'field' ,
+						    required => 't',
+						    description => 'field to process',},
+						   {name => 'function' ,
+						    required => 't',
+						    description => 'function to process',},
+						   {name => 'fmt' ,
+						    required => 't',
+						    description => 'how to format results',},]}); :>
+    do {
+	return $this->getData (sql => "select $function($field) $field from $table");
+    };
+}
+
+################################################################################
+
+sub setPrecision {
+   <:= $po->contract('setPrecision' => {description => 'modify the precision of a column',
+					getopts => [{name => 'columnName',
+						     required => 1,
+						     description => 'name of the column to alter',},
+						    {name => 'precision',
+						     required => 1,
+						     description => 'new precision',},
+						    {name => 'name',
+						     required => 1,
+						     description => 'name of the table to alter',},
+						    ]}); :>
+    do {
+	my $sql = "alter table $name modify $columnName varchar ($precision)";
+	$this->debugPrint(0, $sql);
+	$this->execute(sql => $sql);
+    };
+}
+
+sub validColumnName {
+   <:= $po->contract('validColumnName' => {description => 'returns a column name that is valid for Oracle',
+					   getopts => [{name => "columnNameTranslators",
+							description => 'translation description for column names that need to be converted'},
+						       {name => 'data' ,
+							required => 't',
+							description => 'data to process',},
+						       ]}); :>
+    do {
+	my @cnts = split(/[,\s]+/,$columnNameTranslators);
+	if ($data =~ /^(comment|date|precision)$/i) {
+	    $data = "$1_"; 
+	} 
+	foreach my $cnt (@cnts) {
+	    my $regex = $ENV{$cnt . "_regex"};
+	    my $_pre = $data;
+	    eval '$data =~ ' . "$regex ;";
+	    $this->debugPrint (0, "converted $_pre to $data")
+		if ($_pre != $data);
+	}
+	substr($data,0,$this->maxColumnLength());
+    };
+}

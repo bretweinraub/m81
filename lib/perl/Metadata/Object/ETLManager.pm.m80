@@ -1,0 +1,41 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Metadata::Object::ETLManager",
+			           isa => 'Metadata::Object',
+                                   include => [],
+                                   example =>
+q[
+    my $ETLManager = $ETLManager->new();   # stub example .... expand
+],
+				   description => 'ETL Manager Object');
+
+$po->setMembers([{name => "sourceDB", 
+		  type => "Metadata::Object::DBDescriptor", 
+		  required => 1,
+		  description => "DBDescriptor for ETL source"},
+                 {name => "targetDB", 
+		  type => "Metadata::Object::DBDescriptor", 
+		  required => 1,
+		  description => "DBDescriptor for ETL target"},
+                 {name => "ETLs",
+                  ref => 'ARRAY',
+                  description => "Array of ETLDescriptor objects"},
+                 {name => "failureThreshold",
+                  description => "Number of failures to endure before ceasing to retry"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+sub _init {
+    1;
+}

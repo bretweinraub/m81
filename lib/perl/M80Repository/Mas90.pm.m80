@@ -1,0 +1,73 @@
+<: #-*- perl -*-
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "M80Repository::Mas90",
+			           isa => 'M80Repository::Base',
+                                   include => [Utils::PerlTools],
+                                   example =>
+q[
+    my $Mas90 = $Mas90->new();   # stub example .... expand
+
+
+# or in a m80 repository file
+use M80Repository::Mas90;
+M80Repository::Mas90->new
+    (slave_user => "",
+     slave_hostname => "",
+     user => "",
+     hostname => "",
+     mas90_user => "",
+     mas90_password => "",
+     mas90_ODBC => "",
+     m81_lib => "",)->dump;
+],
+				   description => 'Mas90 description; stub description please expand');
+
+
+$po->setMembers([{name => "name",
+		  description => "name of this object"},
+		 {name => "slave_user",
+		  description  => "user if using a windows slave",},
+		 {name => "slave_hostname",
+		  description  => "hostname if using a windows slace",},
+		 {name => "user",
+		  description  => "user on mas90 box",},
+		 {name => "hostname",
+		  description  => "hostname on mas90 box",},
+		 {name => 'port',
+		  description => 'optional port number for ssh server on mas90 host',},
+		 {name => "mas90_user",
+		  description  => "providex user name",},
+		 {name => "mas90_password",
+		  description  => "providex password",},
+		 {name => "mas90_ODBC",
+		  description  => "providex odbc connection",},
+		 {name => "m81_lib",
+		  description  => "m81 library on mas90 box",},
+		 ]); 
+:>
+
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+################################################################################
+
+sub dump {
+   <:= $po->contract('dump' => {description => 'dump the output for the m80 repository',
+				getopts => [
+					    #{name => 'data' ,
+					    # required => 't',
+					    # description => 'data to process',},
+					    ]}); :>
+    do {
+	$this->SUPER::dump(@_);
+    };
+}
+
+
+

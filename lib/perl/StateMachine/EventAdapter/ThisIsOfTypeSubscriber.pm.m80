@@ -1,0 +1,64 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "StateMachine::EventAdapter::ThisIsOfTypeSubscriber",
+			           isa => 'StateMachine::EventAdapter::Subscriber',
+                                   include => ['Utils::FunctionalProgramming'],
+                                   example => q[
+    my $SimpleSubscriber = $SimpleSubscriber->new();   # stub example .... expand
+                                                ],
+				   description => '
+
+This subscriber will return all objects that are of type $subscriber->getObjectType. When it
+does this calculation, it bases the decision on the perl "ref" function. That is, the "@ISA"
+array is not searched.
+
+In English, that means that the object is of type $subscriber->getObjectType. It is not a 
+child of a class that is of type $subscriber->getObjectType.
+
+For a subscriber that looks back through all parent types to determine if this object is of
+type X, use the "SimpleSubscriber".
+
+');
+
+$po->setMembers([]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do {
+	$this->setObjectType($this->getXmlhash()->{object});
+	$this->setHint($this->getXmlhash()->{hint}) if $this->getXmlhash()->{hint};
+    };
+
+}
+
+#sub method {
+# remove the spaces from the tag below
+#    < : = $po->contract('method' => {description => "method description"} ); :>
+#}
+	    
+
+sub getObjects {
+    <:= $po->contract( getObjects => { description => 'Implementation of the StateMachine::EventAdapter::Subscriber interface',
+				       getopts => [ { name => 'allObjects',
+						      ref => ARRAY,
+						      description => 'A reference to the @allObjects memory space for the current running StateMachine task' } ] } ) :>
+
+    # now fetch all objects that match the type exactly - no @ISA recursion
+    my $c = 
+    sub { 
+	my $obj = shift; 
+	$this->debugPrint (3, "comparing " . ref($obj) . " to " . $this->{objectType});
+
+	return $obj 
+	    if ref $obj eq $this->{objectType} 
+    };
+    return rmapcar( $c, $allObjects );
+}

@@ -1,0 +1,57 @@
+<@ # -*-perl-*-
+# $m80path = [{ command => "embedperl -embedderChar @" }]
+    use Env qw(filter);
+@><: # -*-perl-*-
+# $m80path = [{ command => embedperl }]
+use Helpers::PerlObject;
+my $po = Helpers::PerlObject->new(name => 'Metadata::Validation::<@=$filter@>',
+                                  isa => 'Metadata::Validation::Internal::SimpleValidation',
+                                  include => ['Metadata::Compiler::Message',
+                                              'Metadata::Utils',
+                                              ],
+                                  description => q!
+
+ENTER A DESCRIPTION!
+                                  !,
+                                  example => q!
+Example:
+
+    use Metadata::Validation::<@=$filter@>;
+    my $validation = new Metadata::Validation::<@=$filter@>();
+    $study->getEndFilterList->addFilter( $validation );
+
+!);
+
+print $po->dump();
+:>
+
+sub _new {
+    my $this = shift;
+    $this->setName( '<@=$filter@>' );
+    $this->setDescription( 'DESCRIPTION' );
+
+    # confirm/specify the following items!
+    $this->setClassMask('host$');
+}
+
+sub assert {
+    <:= $po->contract( assert => { description => 'This function is a callback used to more flexibly determine if an object should be processed. Return a boolean value to continue/halt processing this option.',
+                                   getopts => [ { name => 'obj',
+                                                  description => 'A MetaDataObject that is currently being processed',
+                                                  required => 't',
+                                                  ref => 'MetaDataObject' } ] } ) :>
+}
+
+
+sub validate {
+    <:= $po->contract( printFixitCommand => {
+                      description => 'This function is a callback used to get access to run generic validation commands on an object.',
+                      getopts => [ { name => 'obj',
+                                     description => 'A filehandle to the opened fixit file',
+                                     required => t,
+                                     ref => 'MetaDataObject' },
+                                   { name => 'messages',
+                                     description => 'Access to the @messages array',
+                                     required => t,
+                                     ref => 'ARRAY' } ] } ) :>
+}

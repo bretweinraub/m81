@@ -1,0 +1,49 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "DB::ProvideXHandle",
+			           isa => 'DB::DBHandle',
+                                   include => [],
+                                   example =>
+q[
+    my $DB::ProvideXHandle = $DB::ProvideXHandle->new();   # stub example .... expand
+],
+				   description => 'DB::ProvideXHandle description; stub description please expand');
+
+$po->setMembers([
+#                 {name => "filename", 
+#		  type => "string", 
+#		  required => 1,
+#		  format => '([\/\w\d]+)\.uxf',
+#		  description => "Name of the document to generate"},
+#                 {name => "elements",
+#                  ref => 'ARRAY',
+#                  description => "Array of UXFElement objects in this document"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do {
+	$this->setConnectString("dbi:ODBC:" . $this->getSID());
+	$this->connect();
+    };
+}
+
+sub DBIPrecisionToGenericPrecision {
+   <:= $po->contract('DBIPrecisionToGenericPrecision' => {description => 'SQL Server "Length" doesn\'t conform to the standard used by Oracle or Mysql.  This is the actual storage size.  So we need to convert this to the bounding used by oracle (which is the number of digits to store).  Fun!  DBHandle contains a default method that just returns the passed in length',
+							  getopts => [
+								      {name => 'data' ,
+								       required => 't',
+								       description => 'data to process',},
+								      ]}); :>
+    do {
+	$data;
+    };
+}

@@ -1,0 +1,16 @@
+$files = {
+           '_<./automator.pl' => [
+                                   {
+                                     'expr' => undef,
+                                     'value' => '1',
+                                     'text' => '    $debug->debug(2,"in manageParents");
+',
+                                     'fname' => './automator.pl',
+                                     'type' => 'user',
+                                     'line' => '1619'
+                                   }
+                                 ]
+         };
+$expr_list = [];
+$eval_saved_text = '';
+$main_win_geometry = '1280x951+0+26';

@@ -1,0 +1,49 @@
+<: #-*- perl -*-
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'simpleTar.pl' , 
+                                   description => 'A wrapper around the Template::SimpleTextArchive library',
+                                   include => ['Template::SimpleTextArchive'],
+                                   suppressRequiredVariableCheck => 't',
+                                   getopts => [{ tag => 'create',
+                                                 variable => '$create',
+                                                 description => 'Set this commandline flag to create a new archive',
+                                             },
+                                               { tag => 'x|extract',
+                                                 variable => '$extract' ,
+                                                 description => 'Set this commandline flag to extract an existing archive',
+                                             },
+                                               { tag => 'rootDirectory:s',
+                                                 variable => '$root',
+                                                 required => 't',
+                                                 description => 'The root directory that the archive file should created from/extracted to' },
+                                               { tag => 'f|archiveFile:s',
+                                                 variable => '$file',
+                                                 required => 't',
+                                                 description => 'The archive file' },
+                                               { tag => 'useRunPathHeader',
+                                                 variable => '$runPathHeader',
+                                                 description => 'Set this to include a "safe" runPath header in the generated template file. This is for convenience only.' },
+                                               { tag => 'verbose+',
+                                                 variable => '$verbose',
+                                                 description => 'Turn on verbose output' }],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+ 
+print_usage() unless $root && $file && ($create || $extract);
+
+my $t = Template::SimpleTextArchive->new(rootDirectory => $root,
+                                         archiveFile => $file,
+                                         debug => $debug,
+                                         defaultRunPathHeader => $runPathHeader,
+                                         verbose => $verbose);
+if ($create) {
+    $t->create();
+} elsif ($extract) {
+    $t->extract();
+}
+
+cleanup 0; # "archive file created in $file";

@@ -1,0 +1,97 @@
+<: #-*- perl -*-
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'buildRTCircuitMap.pl' , 
+                                   description => '',
+                                   include => [DB::DBHandleFactory],
+                                   getopts => [
+ 					       { tag => 'crawlDir:s',
+                                                 required => 't',
+                                                 description => 'where these rt tickets get crawled to',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+my %results = %{$dbhandle->getData(sql => "select id, to_char (lastupdated, 'YYYY/MM/DD HH24:MI:SS') lastupdated, to_char (created, 'YYYY/MM/DD HH24:MI:SS') created from rtticket where id >= 325200", lc => 1)};
+
+my %circuits = %{$dbhandle->getData(sql => "select name, carrier_circuit_id_c, carrier_circuit_idno2_c from sugar_circuit where deleted = 0", lc => 1)};
+my %accounts = %{$dbhandle->getData(sql => "select name from sugar_account where deleted = 0", lc => 1)};
+my %contacts = %{$dbhandle->getData(sql => "select first_name, last_name, account_name from sugar_contact_v where deleted = 0", lc => 1)};
+
+for (my $ndx = 0; $ndx  < $results{rows}; $ndx++) {
+    map {
+	eval '$main::' . $_ . ' = $results{' . $_ . '}[$ndx]';
+    } (keys (%results));
+
+    my  $file = "$crawlDir/$id.html";
+    debugPrint(0, "reading $file");
+    open DATA, "< $file";
+    
+    my $data;
+    while (<DATA>) {
+	$data .= $_;
+    }
+
+    for (my $idx = 0; $idx  < $circuits{rows}; $idx++) {
+	map {
+	    eval '$main::' . $_ . ' = $circuits{' . $_ . '}[$idx]';
+	} (keys (%circuits));
+
+
+	if ($data =~ /$name/i ||
+	    ($carrier_circuit_id_c and 
+	     $data =~ /$carrier_circuit_id_c/i and
+	     $carrier_circuit_id_c !~ /WBS Connect/) ||
+	    ($carrier_circuit_idno2_c and
+	     $data =~ /$carrier_circuit_idno2_c/i)) {
+	    debugPrint(0, "YES: $id matches $name - $carrier_circuit_id_c  - $carrier_circuit_idno2_c");
+	} else {
+	    debugPrint(1, "NO: $id matches $name");	    
+	}
+    }
+
+    for (my $idx = 0; $idx  < $accounts{rows}; $idx++) {
+	map {
+	    eval '$main::' . $_ . ' = $accounts{' . $_ . '}[$idx]';
+	} (keys (%accounts));
+
+	if ($name) {
+	    if ($data =~ /$name/) {
+		debugPrint(0, "YES: $id matches account $name");
+	    } else {
+		debugPrint(1, "NO: $id matches $name");	    
+	    }
+	}
+    }
+
+    for (my $idx = 0; $idx  < $contacts{rows}; $idx++) {
+	map {
+	    eval '$main::' . $_ . ' = $contacts{' . $_ . '}[$idx]';
+	} (keys (%contacts));
+
+	eval {
+	    $first_name =~ s/\s//g;
+	    $last_name =~ s/\s//g;
+	};
+	Confess "$first_name $last_name: $@" if $@;
+
+	if ($first_name and $last_name
+	    and $first_name !~ /\?/ and $last_name !~ /\?/) {
+	    eval {
+		if ($data =~ /$first_name\s+$last_name/i) {
+		    debugPrint(0, "YES: $id matches contact $first_name $last_name ($account_name)");
+		} else {
+		    debugPrint(1, "NO: $id matches $first_name $last_name");	    
+		}
+	    };
+	    Confess "$@: $first_name $last_name" if $@;
+	}
+    }
+    close DATA;
+}
+ 
+cleanup 0; 

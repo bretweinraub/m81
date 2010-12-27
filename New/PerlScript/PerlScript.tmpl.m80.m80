@@ -1,0 +1,20 @@
+<@ # $m80path = [{command => "embedperl.pl  -embedderChar @" , }] -*-xml-*- 
+@><: #-*- perl -*- <@ use Env; @> # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => '<@= $script @>.pl' , 
+                                   description => 'description for <@= $script @>',
+                                   include => [],
+                                   getopts => [
+#  					       { tag => 'someTag:s',
+#                                                required => 't',
+#                                                default => '1'
+#                                                description => 'description of someTag',},
+					       ],
+                                   );
+print $ps->dump() . $ps->pod();
+:>
+ 
+#print_usage() unless .... some condition;
+
+cleanup 0; # "

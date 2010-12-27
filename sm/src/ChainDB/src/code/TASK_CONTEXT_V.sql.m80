@@ -1,0 +1,57 @@
+<: # -- -*-perl-*-
+# -- $m80path = [{command => embedperl}]
+
+use File::Basename;
+use lib dirname($0);
+use Data::Dumper;
+use dbutil;
+require "dbConnect.pl";
+
+sub table_clause { 
+    my ($table_name, @fields) = @_;
+    my $sql = 'select';
+    if (scalar @fields) {
+        for ($f = 0; $f < scalar @fields; $f++) { $sql .= ',' if $f; $sql .= " $fields[$f]" }
+    } else {
+        $sql .= " $table_name.* ";
+    }
+    $sql .= ", '$table_name' source_table ";
+    return $sql . " from $table_name\n" ;
+}
+
+sub union_all {
+    my ($rs) = @_;
+#    my $column_cache = 0;
+    my @fields = ();
+    my $out = '';
+    for ($i = 0; $i < $rs->{rows}; $i++) {
+#        print STDERR "Looking at $i\n";
+#        my %table_cols = ();
+#         unless ($column_cache) {
+#             dbutil::loadSQL($dbh, "select column_name from user_tab_columns where table_name = '$rs->{TABLE_NAME}->[$i]'", \%table_cols);
+#               print STDERR Dumper(\%table_cols);
+#               for ($j = 0; $j < $table_cols{rows}; $j++) {
+#                   push @fields, $table_cols{COLUMN_NAME}->[$j];
+#               }
+#               $column_cache = 1;
+#           }
+        $out .= "union all\n" if $i;
+        $out .= table_clause( $rs->{TABLE_NAME}->[$i], @fields );
+    }
+    if ($out) {
+        return $out . "union all\n" . table_clause('task_context', @fields) . "\n";
+    } else {
+        return table_clause( 'task_context' );
+    }
+}
+
+
+dbutil::loadSQL ($dbh, 
+                "select table_name from user_tables where table_name like 'TASK_CONTEXT_P_%'",
+                \%ret, 
+                $debug);
+
+# print STDERR Dumper(\%ret); 
+print "create or replace view task_context_v as\n";
+print union_all( \%ret );
+:>

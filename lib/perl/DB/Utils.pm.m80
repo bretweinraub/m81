@@ -1,0 +1,180 @@
+<: #-*- perl -*-
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "DB::Utils",
+			           isa => '',
+                                   include => ['Time::HiRes qw( usleep ualarm gettimeofday tv_interval )',],
+                                   example =>
+q[
+# using DB::Utils just imports routines into your namespace.
+
+use DB::Utils;
+
+],
+				   description => 'Database Utilities');
+
+$po->setMembers([]); 
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+no strict ;
+@ISA = qw(Exporter);
+@EXPORT = qw(DBString SQLStringify createTables TV_INTERVAL rectifySchemas);
+use strict ;
+
+
+################################################################################
+
+sub TV_INTERVAL {
+   <:= $po->contract('TV_INTERVAL' => {description => 'Generates a string representation of the difference between two timestamps',
+				       static => 1,
+				       getopts => [{name => 'start',
+						    required => 1,
+						    description => 'Start time of the interval',},
+						   {name => 'end',
+						    required => 1,
+						    description => 'End time of the interval',},]}); :>
+    do {
+	tv_interval($start,$end) . " secs";
+    };
+}
+
+################################################################################
+
+sub createTables {
+   <:= $po->contract('createTables' => {description => 'takes a dbhandle, a DB::Table description and a list of destination tables and clones the tables.',
+					static => 't',
+					getopts => [{name => 'columnNameTranslators',
+						     description => 'translation description for column names that need to be converted'},
+						    {name => 'dbhandle' ,
+						     required => 't',
+						     ref => 'DB::DBHandle',
+						     description => 'the DBHandle in which the new tables will be created.',},
+						    {name => 'sourceTable',
+						     required => 't',
+						     ref => 'DB::Table',
+						     description => "metadata describing the source table"},
+						    {name => 'truncate',
+						     description => 'truncate the destination tables.  This is *EXTREMELY* dangerous should only used if you know what you are doing',},
+						    {name => 'targetTableNames',
+						     required => 't',
+						     description => "either the target table name, or an array reference to a list of target table names",},
+						    {name => 'prefixDateColumns',
+						     default => 'local_',
+						     description => 'prefix for data columns ',},
+						    {name => 'suppressM80',
+						     description => 'don\'t add in the m80 magic columns',},
+						    ]}); :>
+    do {
+	# TODO: schema differences should be rectified here
+
+	my $ttns = ((ref ($targetTableNames) =~ /ARRAY/) ? $targetTableNames
+		    : [$targetTableNames]);# target tables names;
+
+	foreach my $targetTableName (@{$ttns}) {
+	    if (not $dbhandle->tableExists(name => $targetTableName)) {
+		eval {
+		    $dbhandle->clone(sourceTable => $sourceTable,
+				     prefixDateColumns => $prefixDateColumns,
+				     columnNameTranslators => $columnNameTranslators,
+				     suppressM80 => $suppressM80,
+				     name => $targetTableName);
+		};
+		Confess "$@" if $@;
+	    } else {
+		debugPrint_s (0, "skipped table create of $targetTableName since it already exists");
+	    }
+	    $dbhandle->truncateTable(name => $targetTableName) 
+		if $truncate;
+	}
+    };
+}
+
+
+
+################################################################################
+
+sub DBString {
+   <:= $po->contract('DBString' => {description => 'Convert a string variable into a SQL query read variable, ',
+				    static => 1,
+				    getopts => [
+						{name => 'data' ,
+						 required => 't',
+						 description => 'data to process',},
+						]}); :>
+    do {
+	$data =~ s/\'/\'\'/g;
+	debugPrint_s(2, "returning $data");
+	$data;
+    };
+}
+
+
+################################################################################
+
+sub SQLStringify {
+   
+=pod
+
+=head3 $Utils->SQLStringify (data => "any string"*)
+
+ - data ("any string")		 : data to process
+
+Converts text to a SQL read version ... while handling nulls
+
+=cut
+
+#    confess "DB::Utils::SQLStringify requires named arguments" if scalar @_ && scalar @_ % 2 != 0;
+    my %args = @_;
+    my $data = $args{data};
+    Confess "argument 'data' is required for DB::Utils::SQLStringify()" unless exists $args{data};
+
+    do {
+	if ($data)  {
+	    return "'" . DBString (data => $data) . "'";
+	}
+	else {
+	    return "null";
+	}
+    };
+}
+
+
+################################################################################
+
+sub rectifySchemas {
+   <:= $po->contract('rectifySchemas' => {description => 'takes two table definitions and attempts to alter one table to match the other.',
+					  static => 1,
+					  getopts => [{name => 'sourceTable',
+						       ref => 'DB::Table',
+						       description => 'source table reference',},
+						      {name => 'targetTable',
+						       ref => 'DB::Table',
+						       description => 'target table reference',},]}); :>
+    do {
+	my %sourceColumns =  %{$sourceTable->getColumns()};
+	my %targetColumns =  %{$targetTable->getColumns()};
+
+	foreach my $key (keys(%sourceColumns)) {
+	    my $sourceColumn = $sourceColumns{$key};
+	    my $targetColumn = $targetColumns{$key};
+
+	    debugPrint_s(1, "$sourceColumn->{name} ; source: $sourceColumn->{type} $sourceColumn->{precision} $sourceColumn->{scale} ; target: $targetColumn->{type} $targetColumn->{precision} $targetColumn->{scale}");
+
+	    if ($sourceColumn->{type} eq 12 and $targetColumn->{type} eq 12
+		and ($sourceColumn->{precision} > $targetColumn->{precision})) {
+		debugPrint_s(0, "$sourceColumn->{name} ; source: $sourceColumn->{type} $sourceColumn->{precision} $sourceColumn->{scale} ; target: $targetColumn->{type} $targetColumn->{precision} $targetColumn->{scale}");
+		debugPrint_s(0, "found expanded size of $sourceColumn->{name}");
+		$targetTable->modifyPrecision(columnName => $key,
+					      precision => $sourceColumn->{precision});
+	    }
+	}
+    };
+}
+

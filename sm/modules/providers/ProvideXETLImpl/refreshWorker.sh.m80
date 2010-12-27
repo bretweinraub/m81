@@ -1,0 +1,68 @@
+<: # -*-sh-*-
+use Helpers::shellHelpers; # $m80path = [{command => "embedperl"}, {command => "m4", chmod => "+x" }];
+print Helpers::shellHelpers::shellScript ( r => [],
+                                           getopts => '(f,file),(t,tables),(-r,rails),(-n,noload)'); 
+:>
+
+sourceDB=${sourceDB}
+sourceRD=${sourceRD}
+
+fieldList=$(eval echo "\${${sourceRD}_fieldList}")
+
+if [ -n "${fieldList}" ]; then
+    fieldClause="-fields '${fieldList}'"
+    printmsg field list is ${fieldList}
+fi
+
+
+if [ -z "${file}${tables}" ]; then
+    printmsg please set one of -file or -tables
+    usage
+fi
+
+if [ -n "${file}" ]; then
+    checkfile -r $file is not found or is not readable
+    tables=$(cat $file | perl -nle 's/\n//g; $x.=$_." ";END{print $x}')
+fi
+
+test -z "${tables}" && { cleanup 2 could not derive table list ; }
+
+OUTPUT_FILE=$AUTOMATOR_STAGE_DIR/$PROGNAME.$$.out
+
+if [ -z "${noload}" ]; then
+    printmsg beginning fetch of $tables
+
+    if [ -n "$slave_user" ]; then
+	require slave_user slave_hostname user hostname ODBC password user
+
+	printmsg connecting to mas90 slave ${slave_user}@${slave_hostname}
+
+	tar cf - ./refreshData.pl | ssh  -o 'NoHostAuthenticationForLocalhost=yes' ${slave_user}@${slave_hostname} 'echo connected to mas90 slave >&2 ; ssh '${user}'@'${hostname} '"echo connected to mas90 host >&2 ; tar xf - ; export user="'${mas90_user}'" ; export password="'${mas90_password}'" ; export sid="'${mas90_ODBC}'" ; PERL5LIB='${m81_lib}' ./refreshData.pl '${tables}'"' > $OUTPUT_FILE
+
+#	tar cf - ./refreshData.pl | ssh ${slave_user}@${slave_hostname} 'echo connected to mas90 slave >&2 ; ssh '${user}'@'${hostname} '"echo connected to mas90 host >&2 ; tar xf - ; export user="'${mas90_user}'" ; export password="'${mas90_password}'" ; export sid="'${mas90_ODBC}'" ; PERL5LIB='${m81_lib}' ./refreshData.pl '${tables}"'"' > $OUTPUT_FILE
+	RC=$?
+    else
+	test -n "${port}" && extras="-p ${port}"
+	printmsg ssh $extras ${user}'@'${hostname}
+	set -x
+#	tar cf - ./refreshData.pl | ssh $extras ${user}'@'${hostname} 'set -x; echo connected to mas90 host >&2 ; tar xf - ; export user="'${mas90_user}'" ; export password="'${mas90_password}'" ; export sid="'${mas90_ODBC}'" ; PERL5LIB='${m81_lib}' ./refreshData.pl '${tables} > $OUTPUT_FILE
+
+	ssh  -o 'NoHostAuthenticationForLocalhost=yes' $extras ${user}'@'${hostname} 'set -x; echo connected to mas90 host >&2 ; export user="'${mas90_user}'" ; export password="'${mas90_password}'" ; export sid="'${mas90_ODBC}'" ; PERL5LIB='${m81_lib}' ./refreshData.pl '${fieldClause}' '${tables} > $OUTPUT_FILE
+
+# 	printmsg mas90_password is $mas90_password
+# 	ssh $extras ${user}'@'${hostname} 'set -x; echo connected to mas90 host >&2 ; PERL5LIB='${m81_lib}' ./refreshData.pl -debug -debug -user "'${user}'" -password "'${mas90_password}'" -sid "'${mas90_ODBC}'" '${tables} > $PROGNAME.$$.out
+	RC=$?
+    fi
+	
+    if [ $RC -ne 0 ]; then
+	cleanup 1 fetch of data failed
+    fi
+
+    docmd m80 --execute ./cloneData.pl -doUpdate -dataFile $OUTPUT_FILE
+fi
+
+
+
+cleanup 0
+
+    

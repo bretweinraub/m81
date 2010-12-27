@@ -1,0 +1,74 @@
+<@ # $m80path = [{command => "embedperl.pl  -embedderChar @" , }] -*-xml-*- 
+@><!-- $m80path = [{command => "embedperl.pl" , cat => true}] -->
+<ChainGang name="$(env.M80_BDF)" 
+	   wwwroot="/var/www/html/$(env.M80_BDF)/taskData"
+	   urlbase="/$(env.M80_BDF)/taskData"
+	   stageDir="/data/deployments/$(env.M80_BDF)/stage"
+	   AdminAddress="$(env.CONTROLLER_SPAM_ADDRESS)">
+
+  <ChainDB username="$(env.CONTROLLER_USER)" 
+	   password="$(env.CONTROLLER_PASSWD)" 
+	   port="$(env.CONTROLLER_PORT)"
+	   host="$(env.CONTROLLER_HOST)"
+	   sid="$(env.CONTROLLER_SID)"/>
+
+<@
+
+use Term::ANSIColor qw(:constants);
+sub Confess (@) {confess BOLD, RED, @_, RESET}
+
+$dev = $ENV{DEV};
+
+sub docmd {
+    my ($cmd) = @_;
+    print STDERR "generatedConfig.xml.m80.m80 running command: $cmd\n";
+    return (`$cmd`);
+}
+#
+# This next block will loop through the env variables created by the 
+# newAutomatorModule macro (in //QA/wlp/main/perf/m80repository/stateMachinePackage.m4).
+#
+# This builds up a list of Automator Modules in an env variable called AUTOMODULES.
+#
+# Since I'm generating m80 directives of format '<:', I need to change the m80 embedder
+# character (see the m80 path line).
+#
+#
+# Confusing to read I agree ; add -dumpperl to the embedperl.pl line to see the script this
+# template generates.
+#
+      @modules = split /\s+/, $ENV{AUTOMODULES}; 
+
+Confess "no \$AUTOMODULES found, maybe you forget to do a m80 --execute" if $#modules <  0;
+     foreach (@modules) {
+         if ($_ && not exists $found{$_}) {
+	     $found{$_} = "true";
+	     print STDERR "found AUTOMODULE $_\n";
+	     if ($dev) {
+		 $deployDir = $ENV{$_ . "_SRC_DIR"};
+	     } else {
+		 $deployDir = $ENV{$_ . "_DEPLOY_DIR"};
+	     }
+	     $srcDir    = $ENV{$_ . "_deploy_PATH"}; 
+
+             # look in the module.xml for a line with the text 'SCOPED=true'
+             my $scoped = '0';
+             my $file = '';
+             if (-f "$srcDir/module.xml.m80") {
+                 $file = $srcDir . '/module.xml.m80';
+             } else {
+                 $file = $srcDir . '/module.xml';
+             }
+
+             ($checkIfScoped) = docmd( "cat $file | perl -nle 'print if /SCOPED_MODULE\\s*=\\s*/'");
+             print STDERR "Scoping is: $checkIfScoped\n";
+             $scoped = 'true' if $checkIfScoped;
+@>
+  <module name="<@= $_ @>"
+          scoped="<@= $scoped @>"
+	  deployDir="<@= $deployDir @>"<@ print "\n	  commandPrototype=\"" . $ENV{$_ . "_COMMAND_PROTOTYPE"} . "\"" if $ENV{$_ . "_COMMAND_PROTOTYPE"}; @>>
+         <:- <@= $deployDir @>/module.xml :>
+  </module> <!-- END MODULE <@= $_ @> -->
+    <@ }} @>
+
+</ChainGang>

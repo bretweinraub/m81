@@ -1,0 +1,82 @@
+<: #-*- perl -*- # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'DirCleaner.pl' , 
+                                   description => 'Cleans up task related directories',
+                                   include => [DB::DBHandleFactory,
+					       'File::Listing qw(parse_dir)'],
+                                   getopts => [{tag => 'directories=s@',
+                                                required => 't',
+                                                description => 'list of directories to process',},
+					       {tag => "targetNumber:s",
+						required => 1,
+						description => "target number of directories to maintain",},
+					       {tag => "archive",
+						description => "archive instead of remove"},
+					       {tag => "sleepVal",
+						default => 3600,
+						description => "archive instead of remove"},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+use strict;
+
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+my %results = %{$dbhandle->getData(sql => "select task_id, status, (sysdate - updated_dt) * 86400 age from task order by (sysdate - updated_dt) * 86400 desc", lc => 1)};
+
+my %taskHash = ();
+
+for (my $ndx = 0; $ndx  < $results{rows}; $ndx++) {
+    my $task_id = $results{task_id}[$ndx];
+    my $status = $results{status}[$ndx];
+    my $age = $results{age}[$ndx];
+
+    $taskHash{$task_id} = { status => $status,
+			    age => $age };
+}
+
+while (1) {
+    foreach my $directory (@$directories) {
+	debugPrint(0, "processing $directory");
+	chdir($directory)
+	    or Confess "can\'t cd to $directory";
+
+	opendir DIR, "$directory"
+	    or Confess "can\t open $directory";
+
+	my @dirList = ();
+	foreach my $dir (readdir(DIR)) {
+	    next unless $dir =~ /^[0-9]+$/;
+
+	    next if
+		$taskHash{$dir}->{status} =~ /(running|waiting|analyzing|new)/ ||
+		$taskHash{$dir}->{status} !~ /(succeeded|failed|canceled)/;
+
+	    push (@dirList, $dir);
+	}
+
+	my @sort = sort {$taskHash{$b}->{age} <=> $taskHash{$a}->{age}} @dirList;
+
+	debugPrint (0, "found " . ($#sort + 1) . " eligible directories");
+
+	my $save = my $extras = ($#sort + 1) - $targetNumber;
+
+	debugPrint (0, "total outstanding is $extras .. a negative indicates none to be deleted");
+
+	foreach my $dir (@sort) {
+	    last unless $extras > 0;
+	    debugPrint(1, "processing $dir: " . $taskHash{$dir}->{status} . ", age " . $taskHash{$dir}->{age} . " (" . $extras-- . ")");
+	    docmdq ("rm -rf $dir");
+	}
+
+	debugPrint(0, "removed $save directories");
+
+	closedir (DIR);
+    }
+    debugPrint(0, "going to sleep for $sleepVal secs");
+    sleep($sleepVal);
+}
+ 
+cleanup 0; 

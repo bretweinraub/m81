@@ -1,0 +1,69 @@
+<: #-*- perl -*-
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "M80Repository::RailsProject",
+			           isa => 'M80Repository::Base',
+                                   include => [],
+                                   example =>
+q[
+    my $RailsProject = $RailsProject->new();   # stub example .... expand
+
+
+# or in a m80 repository file
+use M80Repository::RailsProject;
+M80Repository::RailsProject->new(name => "MetadataObjectName",
+			      interface => "Interface", # see $SYBASE/etc/freetds.conf
+			      user => "scott",
+			      password => "tiger")->dump;
+],
+				   description => 'RailsProject description; stub description please expand');
+
+
+$po->setMembers([
+        {name => "name",
+         description  => "stub description of name",},
+        {name => "standalone_port",
+         description  => "not used in mongrep",},
+        {name => "mongrel_ports",
+         description  => "not used in mongrep",},
+        {name => "external_address",
+         description  => "not used in mongrep",},
+        {name => "source_path",
+         description  => "not used in mongrep",},
+        {name => "description",
+         description  => "not used in mongrep",},
+
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+
+################################################################################
+
+sub dump {
+   <:= $po->contract('dump' => {description => 'dump the output for the m80 repository',
+				getopts => [
+					    #{name => 'data' ,
+					    # required => 't',
+					    # description => 'data to process',},
+					    ]}); :>
+    do {
+	my $ret = $this->SUPER::dump(@_) ; 
+	
+	if ($this->getStandalone_port()) {
+	    $ret .= "\ndefine_variable([" . $this->getName . "_full_address],[" . $this->getExternal_address() . ":" . $this->getStandalone_port() . "])\n";
+	} else {
+	    $ret .= "\ndefine_variable([" . $this->getName . "_full_address],[" . $this->getExternal_address()  . "])\n";
+	}
+
+#	$ret .= "\ndefine_variable([" . $this->getName . "_type],[sqlserver])\n";
+	$ret;
+    };
+}

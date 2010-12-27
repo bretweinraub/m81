@@ -1,0 +1,49 @@
+# -*-shell-script-*-
+<: 
+use shellHelpers; # $m80path = [{command => "embedperl.pl"}, {command => "m4", chmod => "+x" }];
+print shellHelpers::shellScript ( r => [], getopts => "(c, -command), (t, task_id),(-r,reload),(-s,suppressdump),(a,action_id),(-A,allowallenvs)" ); 
+:>
+
+eval $(m80 --export)
+
+if [ -n "$action_id" ]; then
+    internal_id=$action_id
+else
+    internal_id=$task_id
+fi
+
+export AUTOMATOR_STAGE_DIR=/data/deployments/${M80_BDF}/stage/$internal_id
+
+mkdir -p $AUTOMATOR_STAGE_DIR
+
+if [ ! -f /tmp/$PROGNAME.$internal_id -o -n "$reload" ]; then
+    echo "reloading  id $internal_id"
+    if [ -n "$task_id" ]; then
+	dumpContext.pl -task_id $task_id > /tmp/$PROGNAME.$internal_id
+	if [ $? -ne 0 ]; then
+	    cleanup 1 cannot dump context
+	fi
+    else
+	dumpContext.pl -action_id $action_id | grep -v "export COMMAND=" | grep -v "export GROUPS=" > /tmp/$PROGNAME.$internal_id
+	if [ $? -ne 0 ]; then
+	    cleanup 1 cannot dump context
+	fi
+    fi
+fi
+
+if [ -n "$action_id" -a -z "${allowallenvs}" ]; then
+    for e in $(env | cut -d= -f1 | perl -nle 'print if /^[A-Za-z]/ && not /(ORACLE|PATH|M80|P!*!*!*ERL|TERM|S!*!*!*HELL|command|task_id|debug|reload|mapper|suppressdump|task_id|action_id|PROGNAME|COMMAND|TOP|DISPLAY)/'); do
+	unset $e
+    done
+fi
+
+
+. /tmp/$PROGNAME.$internal_id
+
+if [ $command = "eval" ]; then
+    eval $COMMAND
+else
+    printmsg unknown command
+fi
+
+cleanup $?

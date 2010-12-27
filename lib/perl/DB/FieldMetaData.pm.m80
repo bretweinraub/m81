@@ -1,0 +1,204 @@
+<: #-*- perl -*-
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "DB::FieldMetaData",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+  my $FieldMetaData = $FieldMetaData->new();   # stub example .... expand
+
+  # creating a field on the fly (and dcloning it to avoid polluting the initial object).
+
+  my $sourceTable = { ... } # type of DB::Table;
+
+  my %columns = %{$sourceTable->getColumns()};
+
+  $columns{rid} = DB::FieldMetaData->new(name => "rid",
+					 type => DB::FieldMetaData::getDataType(data => "NUMBER"),
+					 precision => 10,
+					 handle => $this->getSourceHandle(),
+					 scale => 0));
+
+
+  
+],
+				   description => 
+'
+ DB independent represention of the metadata for a field.  In common usage 
+ the constructor is never called.  Instead these objects are created when 
+ creating a new object of class DB::Table. 
+');
+
+$po->setMembers([{name => "type", 
+		  required => 1,
+		  description => "Name of the document to generate"},
+		 {name => "name",
+		  required => 1,
+		  description => "name of this column",},
+		 {name => "scale", 
+		  required => 1,
+		  description => "Name of the document to generate"},
+		 {name => "dateFormat", 
+		  description => "certain data types (like MySQL date) need special date format management"},
+		 {name => "handle", 
+		  ref => "DB::DBHandle", 
+		  required => 1,
+		  description => "Handle that was used to derive this metadata"},
+		 {name => "precision", 
+		  required => 1,
+		  description => "Name of the document to generate"},]); 
+:>
+<:= $po->dump(); :>
+
+sub _new { 
+    <:= $po->dumpContract(method => "_new"); :> 
+
+    do {
+	my $handle = $this->getHandle();
+
+	if ($this->getType() == 9) {
+
+	    $this->setDateFormat($handle ? $handle->getSmallDateFormat(date => $this->getType())
+				 : 'YYYY-MM-DD');
+
+	    $this->debugPrint (1, " setting date format for column " . $this->getName() . " of type DATE (no time) to " .
+			       $this->getDateFormat());
+	}
+
+	$this->setName(lc($this->getName()));
+    };
+}
+
+
+################################################################################
+
+sub getDataType {
+   <:= $po->contract('getDataType' => {description => '
+Takes a string type and returns a DBI datatype.  For more information on DBI types see the DBI Documentation
+
+ SQL_CHAR             1
+ SQL_NUMERIC          2
+ SQL_DECIMAL          3
+ SQL_INTEGER          4
+ SQL_SMALLINT         5
+ SQL_FLOAT            6
+ SQL_REAL             7
+ SQL_DOUBLE           8
+ SQL_DATE             9
+ SQL_TIME            10
+ SQL_TIMESTAMP       11
+ SQL_VARCHAR         12
+ SQL_LONGVARCHAR     -1
+ SQL_BINARY          -2
+ SQL_VARBINARY       -3
+ SQL_LONGVARBINARY   -4
+ SQL_BIGINT          -5
+ SQL_TINYINT         -6
+ SQL_BIT             -7
+ SQL_WCHAR           -8
+ SQL_WVARCHAR        -9
+ SQL_WLONGVARCHAR   -10
+
+',
+ static => 1,
+ getopts => [
+	     {name => 'data' ,
+	      required => 't',
+	      description => 'data to process',},
+	     ]}); :>
+    do {
+      SWITCH: {
+	  $data =~ /WLONGVARCHAR/ && do {
+	      return -10;
+	      last SWITCH;
+	  };
+	  $data =~ /WVARCHAR/ && do {
+	      return -9;
+	      last SWITCH;
+	  };
+	  $data =~ /WCHAR/ && do {
+	      return -8;
+	      last SWITCH;
+	  };
+	  $data =~ /LONGVARCHAR/ && do {
+	      return -1;
+	      last SWITCH;
+	  };
+	  $data =~ /VARCHAR/ && do {
+	      return 12;
+	      last SWITCH;
+	  };
+	  $data =~ /CHAR/ && do {
+	      return 1;
+	      last SWITCH;
+	  };
+	  $data =~ /NUMERIC/ && do {
+	      return 2;
+	      last SWITCH;
+	  };
+	  $data =~ /DECIMAL/ && do {
+	      return 3;
+	      last SWITCH;
+	  };
+	  $data =~ /INTEGER/ && do {
+	      return 4;
+	      last SWITCH;
+	  };
+	  $data =~ /SMALLINT/ && do {
+	      return 5;
+	      last SWITCH;
+	  };
+	  $data =~ /FLOAT/ && do {
+	      return 6;
+	      last SWITCH;
+	  };
+	  $data =~ /REAL/ && do {
+	      return 7;
+	      last SWITCH;
+	  };
+	  $data =~ /DOUBLE/ && do {
+	      return 8;
+	      last SWITCH;
+	  };
+	  $data =~ /DATE/ && do {
+	      return 9;
+	      last SWITCH;
+	  };
+	  $data =~ /TIMESTAMP/ && do {
+	      return 11;
+	      last SWITCH;
+	  };
+	  $data =~ /TIME/ && do {
+	      return 10;
+	      last SWITCH;
+	  };
+	  $data =~ /LONGVARBINARY/ && do {
+	      return -4;
+	      last SWITCH;
+	  };
+	  $data =~ /VARBINARY/ && do {
+	      return -3;
+	      last SWITCH;
+	  };
+	  $data =~ /BINARY/ && do {
+	      return -2;
+	      last SWITCH;
+	  };
+	  $data =~ /BIGINT/ && do {
+	      return -5;
+	      last SWITCH;
+	  };
+	  $data =~ /TINYINT/ && do {
+	      return -6;
+	      last SWITCH;
+	  };
+	  $data =~ /BIT/ && do {
+	      return -7;
+	      last SWITCH;
+	  };
+      }
+	Confess "could not find a matching type for $data";
+    };
+}

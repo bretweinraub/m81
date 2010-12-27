@@ -1,0 +1,22 @@
+-- -*-sql-*- --
+-----------------------------------------------------------------
+-- Package:		P_TASK
+--
+-- Date:		
+--
+-- Description:		
+--
+-----------------------------------------------------------------
+--
+PROMPT Creating PACKAGE P_TASK.
+CREATE OR REPLACE PACKAGE P_TASK AUTHID CURRENT_USER AS
+
+  package_name CONSTANT VARCHAR(32) := 'P_TASK';
+
+PROCEDURE     	SET_ACTION 
+(
+	task_id		task.task_id%type,
+	actionname	action.actionname%type
+);
+
+END;

@@ -1,0 +1,30 @@
+<: #-*- perl -*-
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'parseCSV.pl' , 
+                                   description => 'description for parseCSV',
+                                   include => [CSV::CSVDocument],
+                                   getopts => [{tag => 'field:s',
+						variable => '$field',
+						required => 't',
+						description => 'field to analyze',},
+ 					       {tag => 'file:s',
+						variable => '$file',
+						required => 't',
+						description => 'table to analyze',},],);
+print $ps->dump(); print $ps->pod();
+:>
+
+
+do {
+    my $CSVDocument = new CSV::CSVDocument(filename => $file, debug => $debug, mergeText => '\r\n');
+    $CSVDocument->parseFields();
+    $CSVDocument->parseLines();
+    my @lines = @{$CSVDocument->getLines()};
+    foreach $line (@lines) {
+	print $line->{$field} . "\n";
+    }
+};
+
+cleanup 0; # "

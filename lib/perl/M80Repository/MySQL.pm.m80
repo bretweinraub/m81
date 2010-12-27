@@ -1,0 +1,81 @@
+<: #-*- perl -*-
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "M80Repository::MySQL",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+    my $Sugar = $Sugar->new();   # stub example .... expand
+],
+				   description => 'M80 build macros around Sugar CRM');
+
+$po->setMembers([
+#                 {name => "filename", 
+#		  type => "string", 
+#		  required => 1,
+#		  format => '([\/\w\d]+)\.uxf',
+#		  description => "Name of the document to generate"},
+#                 {name => "elements",
+#                  ref => 'ARRAY',
+#                  description => "Array of UXFElement objects in this document"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+    use Exporter;
+
+
+no strict ;
+@ISA = qw(Exporter);
+@EXPORT = qw(MySQL_DB);
+use strict ;
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+################################################################################
+
+sub MySQL_DB {
+   <:= $po->contract('MySQL_DB' => {description => 'Generate a MySQL DB repository entry ',
+				    static => 't',
+				    getopts => [
+						{name => 'name' ,
+						 required => 't',
+						 description => 'object_name',},
+						{name => 'host' ,
+						 required => 't',
+						 description => 'host name or ip of server',},
+						{name => 'user' ,
+						 required => 't',
+						 description => 'user name on server',},
+						{name => 'password' ,
+						 required => 't',
+						 description => 'password',},
+						{name => 'database' ,
+						 required => 't',
+						 description => 'database',},
+						{name => 'port' ,
+						 required => 't',
+						 description => 'port number',},
+						]}); :>
+    do {
+	my $ret = "append_variable_space([MySQL_DBs],[$name])\n";
+	$ret .= "define_variable([" . $name . "_HOST],[$host])\n";
+	$ret .= "define_variable([" . $name . "_USER],[$user])\n";
+	$ret .= "define_variable([" . $name . "_PASSWD],[$password])\n";
+	$ret .= "define_variable([" . $name . "_PORT],[$port])\n";
+	$ret .= "define_variable([" . $name . "_DATABASE],[$database])\n";
+	$ret .= "define_variable([" . $name . "_type],[mysql])\n";
+	$ret .= "define_variable([" . $name . "_THIS],[$name])\n";
+#	$ret .= "m80NewCustomModule([$name],((deploy,$dev_path,make),(build,$dev_path,make)))\n";
+	$ret;
+    };
+}
+
+
+	    
+

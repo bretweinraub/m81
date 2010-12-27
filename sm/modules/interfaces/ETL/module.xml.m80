@@ -1,0 +1,43 @@
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+$moduleHelpers::SCOPED_MODULE = 'ETL';
+$moduleHelpers::MODULE_DESCRIPTION = ''; # SPECIFY A MODULE DESCRIPTION
+:>
+
+<!-- begin module.xml for ETL   -->
+
+<:
+
+#
+# Following is the list of events that this interface defines. Each event definition is an
+# anonymous hash with the following keys:
+#    - eventName (The name of the event - same as the dispatch name)
+#    - description (A description of the event, intention, etc)
+#
+# 
+
+my @events = ( { eventName => 'extract',
+                 description => 'extract data from the source system' },
+	       { eventName => 'stage',
+                 description => 'stage extracted data for transformation, if the extraction process didn\'t already do this' },
+	       { eventName => 'transform',
+                 description => 'transform extracted data prior to loading' },
+	       { eventName => 'load',
+                 description => 'load transformed extracted data' },
+	       { eventName => 'crawl',
+                 description => '(re-)crawl any web sites that may be associated with this newly processed data' },
+	       { eventName => 'postprocess',
+                 description => 'postprocess transformed extracted data' },
+	       );
+
+
+#print moduleHelpers::interfaceModule( events => \@events, supportAOP => 1 );
+print moduleHelpers::interfaceModule( events => \@events );
+
+:>
+
+<!-- end module.xml for ETL -->
+
+

@@ -1,0 +1,83 @@
+<ChainGang name="$(env.M80_BDF)" 
+	   wwwroot="/var/www/html/$(env.M80_BDF)/taskData"
+	   urlbase="/$(env.M80_BDF)/taskData">
+
+  <ChainDB username="$(env.CONTROLLER_USER)" 
+	   password="$(env.CONTROLLER_PASSWD)" 
+	   port="$(env.CONTROLLER_PORT)"
+	   host="$(env.CONTROLLER_HOST)"
+	   sid="$(env.CONTROLLER_SID)"/>
+
+  <module>
+    <actions>
+      <action name="depend-test-4"
+	      command="exit 0">
+	<transitionMap>
+	  <transition type="returnCode" 
+		      value="0" 
+		      code="$thistask->transitionTo(nextaction => q(depend-test-5))"/>
+	</transitionMap>
+      </action>
+
+      <action name="depend-test-5"
+	      command="exit 0">
+	<transitionMap>
+	  <transition type="returnCode" 
+		      value="0" 
+		      code="$thistask->transitionTo(pop => true)"/>
+	</transitionMap>
+      </action>
+      <action name="depend-test-0"
+	      command="exit 0">
+	<transitionMap>
+	  <transition type="returnCode" 
+		      value="0" 
+		      code="$thistask->transitionTo(nextaction => q(depend-test-4), callback => $thistask->getProperty(actionname))">
+	    <scope field="$(history.depend-test-4.succeeded)" value="^$"/>
+	  </transition>
+	  <transition type="returnCode" 
+		      value="0" 
+		      code="$thistask->transitionTo(nextaction => qw(depend-test-1), pop => true)"/>
+	</transitionMap>
+      </action>
+      <action name="depend-test-1"
+	      command="exit 0">
+	<transitionMap>
+	  <transition type="returnCode" 
+		      value="0" 
+		      code="$thistask->transitionTo(nextaction => q(depend-test-2), mapper => q(s/this/that/;))"/>
+	</transitionMap>
+      </action>
+      <action name="depend-test-2"
+	      command="exit 0">
+	<transitionMap>
+	  <transition type="returnCode" 
+		      value="0" 
+		      code="$thistask->transitionTo(nextaction => q(depend-test-0), callback => $thistask->getProperty(actionname))">
+	    <scope field="$(history.depend-test-0.succeeded)" value="^$"/>
+	  </transition>
+	  <transition type="returnCode" 
+		      value="0" 
+		      code="$thistask->transitionTo(nextaction => q(depend-test-6), mapper => q(s/6/9/;))">
+	  </transition>
+	</transitionMap>
+      </action>
+      <action name="depend-test-6"
+	      command="exit 0">
+	<transitionMap>
+	  <transition type="returnCode" 
+		      value="0" 
+		      code="$thistask->transitionTo(nextaction => q(depend-test-7), mapper => $thistask->getProperty(mapper))"/>
+	</transitionMap>
+      </action>
+      <action name="depend-test-7"
+	      command="exit 0">
+	<transitionMap>
+	  <transition type="returnCode" 
+		      value="0" 
+		      code="$thistask->transitionTo(nextaction => q(__SUCCESS__))"/>
+	</transitionMap>
+      </action>
+    </actions>
+  </module>
+</ChainGang>

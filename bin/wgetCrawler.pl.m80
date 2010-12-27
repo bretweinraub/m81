@@ -1,0 +1,78 @@
+<: #-*- perl -*-  # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'wgetCrawler.pl' , 
+                                   description => 'description for wgetCrawler',
+                                   include => [],
+                                   getopts => [{name => 'config:s',
+						required => 1,
+						description => 'config file for this wget crawl',},
+					       {name => "nocrawl",
+						description => "no crawling, just creation of .url files"},
+					       {name => 'rebuildUrlFiles',
+						description => 'rebuild url files',},
+					       {name => 'sleep',
+						default => '3600',
+						description => 'amount to sleep between crawls'},],
+                                   );
+print $ps->dump() . $ps->pod();
+:>
+
+require "$config"
+    or Confess "cannot load $config";
+
+map {
+    eval '$main::' . $_ . ' = $crawlConfig-> {' . $_ . '}';
+    eval "debugPrint(1, \"using config setting of $_ = \$$_\")";
+} ( keys( %{$crawlConfig} ));
+
+chdir($crawlDir) or do {
+    docmd ("mkdir -p $crawlDir");
+    chdir($crawlDir);
+};
+
+debugPrint(0, "crawlDir is $crawlDir");
+
+while (1) {
+
+    unless ($nocrawl) {
+      SWITCH: {
+	  $type =~ /mediawiki/i && do {
+	      docmdi ('wget -R "*jpg","*Special:*","*Image:*" --mirror  -I /wiki/index.php --no-check-certificate --html-extension  --user=' . $username . " --password=$password -r $crawlerURL");
+	      last SWITCH;
+	  };
+      };
+    }
+
+    my $host = $crawlerURL;
+
+    $host =~ /(http(s|):\/\/)([^\/]+).*/;
+    $host = $3;
+    my $startUrl = $1;
+
+    debugPrint(1, "$host $startUrl");
+
+    my @files = `find $host -type f | grep -v \.url`;
+
+    foreach my $file (@files) {
+	chomp($file);
+	my $urlFile = $file .  ".url";
+
+	my $shortFile = $file;
+	$shortFile =~ s/\.html$//g;
+
+	debugPrint(1, "evaluating $urlFile");
+
+	if (! -f $urlFile or $rebuildUrlFiles) {
+	    open OUT, "> $urlFile";
+	    print OUT "$startUrl$shortFile\n";
+	    close OUT;
+	    debugPrint(0, "wrote $urlFile: $startUrl$file");
+	}
+    }
+    sleep ($sleep);
+}
+
+#print_usage() unless .... some condition;
+
+cleanup 0; # "

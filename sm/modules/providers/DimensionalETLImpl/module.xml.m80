@@ -1,0 +1,39 @@
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+$moduleHelpers::SCOPED_MODULE = 'DimensionalETLImpl';
+
+:>
+
+<!-- begin module.xml for DimensionalETLImpl   -->
+
+<:
+
+$module{extract} = {a => [{n => extract,
+			   d => ['ReplicationETLImpl-extract'],
+			   c => 'exit 0',
+			   t => __SUCCESS__}]};
+
+
+:>
+
+<tasks>
+<:
+    for $m (values %module) {
+        print moduleHelpers::childTasks(%$m);
+    }
+:>
+</tasks>
+
+<actions>
+<:
+    for $m (values %module) {
+        print moduleHelpers::chainActions(%$m);
+    }
+:>
+</actions>
+
+<!-- end module.xml for DimensionalETLImpl -->
+
+

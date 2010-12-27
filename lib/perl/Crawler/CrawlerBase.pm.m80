@@ -1,0 +1,165 @@
+<: #-*- perl -*-
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Crawler::CrawlerBase",
+			           isa => '',
+                                   include => [WWW::Mechanize,
+					       File::Basename,
+					       HTTP::Cookies],
+                                   example =>
+q[
+    my $Crawler::CrawlerBase = $Crawler::CrawlerBase->new();   # stub example .... expand
+],
+				   description => 'Crawler::CrawlerBase description; stub description please expand');
+
+$po->setMembers([{name => "recordsToCrawl",
+                  ref => 'ARRAY',
+                  description => "Array objects to crawl"},
+		 {name => "username",
+                  description => "username for crawl site (if required)"},
+		 {name => "password",
+                  description => "password for crawl site (if required)"},
+		 {name => "loginURL",
+                  description => "url for login (if required)"},
+		 {name => "cookies",
+		  ref => HTTP::Cookies,
+		  description => "an HTML::Cookies cookie jar"},
+		 {name => "mechHandle",
+		  ref => WWW::Mechanize,
+		  description => "a WWW::Mechanize handle"},],); 
+
+:>
+    <:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+
+    do {
+	$this->setCookies(HTTP::Cookies->new(file => 'cookie',autosave => 1));
+	my $mech = WWW::Mechanize->new(cookie_jar => $this->getCookies(), autocheck => 1);
+	$this->setMechHandle($mech);
+
+	my $loginURL = $this->getLoginURL();
+
+	if ($loginURL) {
+	    my $uri = URI->new( $loginURL );
+	    $this->setLoginURL($uri);
+	    $mech->get($uri);
+	    Confess "fetch of $loginURL failed: " . $mech->response->status_line unless $mech->success;
+	    $this->debugPrint (1, "logging into $loginURL");
+	    $this->login();
+	    $this->debugPrint (1, "logged into $loginURL");
+	} else {
+	    $this->debugPrint (0, "skipping login as no loginURL set");
+	}
+
+    };
+}
+
+
+################################################################################
+
+sub crawlAll {
+   <:= $po->contract('crawlAll' => {description => 'runs through all of the recordsToCrawl, and executes the crawl method on them',
+				    getopts => [
+					]}); :>
+    do {
+	foreach my $crawlerRequest (@{$this->getRecordsToCrawl()}) {
+	    $this->crawl(request => $crawlerRequest);
+	}
+    };
+}
+
+
+################################################################################
+
+
+sub failMsg { "failed to open $_[0]: $_[1]" }
+
+
+########################################
+########################################
+
+use Carp qw(longmess);
+
+
+sub crawl {
+   <:= $po->contract('crawl' => {description => 'crawl',
+				 getopts => [
+				     {name => 'request' ,
+				      required => 't',
+				      ref => "Crawler::CrawlerRequest",
+				      description => 'data to process',},
+				     ]}); :>
+    do {
+	my $mech = $this->getMechHandle();
+	my $url = $request->getURL();
+	my $file = $request->getFile();
+	$this->debugPrint (0, "fetching " . $url);
+	eval {
+	    $mech->get( URI->new ($url) );
+	};
+	if ($@) {
+	    Warn (longmess ($@));
+	    $this->debugPrint(0,"sadness;  could not fetch $url .... skipping.");
+	    return 0;
+	} else {
+	    $this->debugPrint (0, "finished fetching " . $url);
+
+	    my $content = $this->postProcess(data => $mech->content(),
+					     request => $request);
+	    
+	    
+	    open OUT, "> $file"
+		|| do {
+		    my $s = failMsg($file, $@);
+		    $this->setStatus($s);
+		    $this->debugPrint (0, $s);
+		    return 0;
+	    };
+
+	    print OUT $content;
+	    close OUT;
+
+	    system ("mkdir -p " . dirname($file));
+	    Confess "cannot create directory " . dirname($file)
+		if ($? ne 0);
+	    
+	    open URL, "> $file" . ".url" || do {
+		my $s = failMsg("$file.url", $@);
+		unlink($file);                                                      # don't really want this lying around.
+		$this->setStatus($s);
+		$this->debugPrint (0, $s);
+		return 0;
+	    };
+
+	    $this->debugPrint (1, "writing $url to $file.url");
+	    
+	    print URL "$url\n";
+	    close URL;
+	    1;
+	}
+    };
+}
+
+
+################################################################################
+
+sub postProcess {
+    <:= $po->contract('postProcess' => {description => 'override this method to implement a postprocess method for the WWW::Mechanize output',
+					getopts => [
+					    {name => 'data' ,
+					     required => 't',
+					     description => 'data to process',},
+					    {name => 'request' ,
+					     required => 't',
+					     ref => "Crawler::CrawlerRequest",
+					     description => 'data to process',},
+					    ]}); :>
+    do {
+	$data;
+    };
+}
+

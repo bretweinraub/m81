@@ -1,0 +1,29 @@
+<: #-*- perl -*-
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Metadata::Object::DBDescriptor",
+			           isa => 'Metadata::Object',
+                                   include => [],
+                                   example =>
+q[
+    my $DBDescriptor = $DBDescriptor->new();   # stub example .... expand
+],
+				   description => 'DBDescriptor description; stub description please expand');
+
+$po->setMembers([
+#                 {name => "filename", 
+#		  type => "string", 
+#		  required => 1,
+#		  format => '([\/\w\d]+)\.uxf',
+#		  description => "Name of the document to generate"},
+                 {name => "m80namespace",
+                  description => "if set, the database connection info for this object can be derived by the m80 namespace listed as an argument"},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}

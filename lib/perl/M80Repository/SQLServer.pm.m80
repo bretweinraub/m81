@@ -1,0 +1,61 @@
+<: #-*- perl -*-
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "M80Repository::SQLServer",
+			           isa => 'M80Repository::Base',
+                                   include => [],
+                                   example =>
+q[
+    my $SQLServer = $SQLServer->new();   # stub example .... expand
+
+
+# or in a m80 repository file
+use M80Repository::SQLServer;
+M80Repository::SQLServer->new(name => "MetadataObjectName",
+			      interface => "Interface", # see $SYBASE/etc/freetds.conf
+			      user => "scott",
+			      password => "tiger")->dump;
+],
+				   description => 'SQLServer description; stub description please expand');
+
+
+$po->setMembers([
+        {name => "name",
+         description  => "stub description of name",},
+        {name => "interface",
+         description  => "stub description of interface",},
+        {name => "user",
+         description  => "stub description of user",},
+        {name => "password",
+         description  => "stub description of password",},
+        {name => "database",
+         description  => "SQL server database to connect to",},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+
+################################################################################
+
+sub dump {
+   <:= $po->contract('dump' => {description => 'dump the output for the m80 repository',
+				getopts => [
+					    #{name => 'data' ,
+					    # required => 't',
+					    # description => 'data to process',},
+					    ]}); :>
+    do {
+	my $ret = $this->SUPER::dump(@_) ; 
+
+	$ret .= "\ndefine_variable([" . $this->getName . "_type],[sqlserver])\n";
+	$ret;
+# "m80NewCustomModule([" . $this->getName() . "],((deploy," . $this->getSrcPath() . ",deploy.sh)))\n";
+    };
+}

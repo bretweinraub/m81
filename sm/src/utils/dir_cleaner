@@ -1,0 +1,154 @@
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'ckuru-tools'
+require 'm80'
+require 'activerecord'
+
+['getoptlong',
+ 'ruby-debug',
+ 'rdoc/ri/ri_paths',
+ 'rdoc/usage']._require
+
+class Task < ActiveRecord::Base
+  set_primary_key "task_id"
+  set_table_name :task
+end
+
+module Popparser
+  class EnvironmentManager
+    @@rails_root = nil
+    
+    def self.rails_root
+      return_value = nil
+      unless return_value = @@rails_root
+        ["#{ENV['TOP']}/rails", 
+         "#{ENV['TOP']}/portal/rails",
+         "#{ENV['Portal_srcPath']}",
+         "#{ENV['Portal_destPath']}"].each do |candidate_for_rails_root|
+          return_value = candidate_for_rails_root if File.exists? candidate_for_rails_root
+          ckebug 0, "checking #{candidate_for_rails_root} as candidate for rails root: #{return_value}"
+          
+          break if return_value
+        end
+        @@rails_root = return_value
+      end
+      ckebug 0, "rails root is #{return_value}"
+      return_value
+    end
+  end
+end
+
+class String
+  def in(*args)
+    ret = false
+    args.each do |a|
+      if self == a
+        ret = true 
+        break
+      end
+    end
+    ret
+  end
+end
+
+task_status = {}
+
+def self.delete(task_status,dir,dir_to_delete)
+  ckebug 0, "deleting #{dir_to_delete} ; #{task_status[dir_to_delete]}"
+  system ("rm -r #{dir}/#{dir_to_delete}")
+  task_status.delete dir_to_delete
+end
+
+emacs_trace do
+  conn, dir, max,sleepval = nil, nil, 5000,1800
+
+  opts = GetoptLong.new([ '--debug', '-d', GetoptLong::NO_ARGUMENT ],
+                        [ '--directory', '-D', GetoptLong::REQUIRED_ARGUMENT ],
+                        [ '--max', '-m', GetoptLong::REQUIRED_ARGUMENT ],
+                        [ '--sleep', '-s', GetoptLong::REQUIRED_ARGUMENT ])
+
+  opts.each do |opt, arg|
+    case opt
+    when '--debug'
+      CkuruTools::Debug.instance.level = CkuruTools::Debug.instance.level + 1
+    when '--directory'
+      dir = arg
+    when '--max'
+      max = arg
+    when '--sleep'
+      sleepval = arg
+    end
+  end
+
+  raise "please define --directory(-D)" unless dir
+
+  rails_root = Popparser::EnvironmentManager.rails_root
+
+  raise "failed to find rails root" unless rails_root
+
+  configfile = File.join(File.join(rails_root, "config"),"database.yml")
+
+  raise "could not load #{configfile}" unless
+    $config = YAML.load_file(configfile)
+
+  ckebug 1, "connecting to #{$config[ENV['M80_BDF']].inspect}"
+  Task.establish_connection $config[ENV['M80_BDF']]
+
+  while true
+    missing_task_dirs, all_directories, dirs_to_delete = [], {}, []
+    
+    Dir.open(dir).each do |d|
+      next unless d.match  /^[0-9]+$/
+      all_directories[d.to_i] = true
+    end
+
+    ckebug 0, "# of dirs to process: #{all_directories.keys.length}"
+    (all_directories.keys.length/300).times do 
+      print "."
+    end
+    puts
+
+    processed_dirs=0
+    all_directories.keys.sort.each do |d| 
+      processed_dirs=processed_dirs+1
+      print "." if (processed_dirs % 300) == 0
+      next unless d.to_s.match  /^[0-9]+$/
+      ckebug 1, "examining #{d}"
+
+      if task_status[d] and task_status[d].in('succeeded','failed','canceled')
+        dirs_to_delete.push d
+      else
+        begin
+          task = Task.find(d)
+          ckebug 1, "found #{d} status in database: #{task.status}"
+          task_status[d] = task.status
+          dirs_to_delete.push(d) if task.status.in('failed','succeeded','canceled')
+        rescue
+          ckebug 1, "did not find #{d} .... so adding to delete list"
+          missing_task_dirs.push d
+        end
+      end
+    end
+    print
+
+    ckebug 0, "total dirs examined: #{all_directories.keys.length}"
+    ckebug 0, "#{dirs_to_delete.length} candidates for deletion"
+
+    # delete missing directories
+
+    missing_task_dirs.each do |missing|
+      self.delete(task_status,dir,missing)
+    end
+
+    dirs_to_delete=dirs_to_delete.sort.reverse
+
+    (all_directories.keys.length-max.to_i-missing_task_dirs.length).times do
+      self.delete(task_status,dir,dirs_to_delete.pop)
+    end
+    sleep sleepval.to_i
+  end
+end
+
+
+

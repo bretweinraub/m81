@@ -1,0 +1,43 @@
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+$moduleHelpers::SCOPED_MODULE = 'RTETLImpl';
+:>
+
+<!-- begin module.xml for RTETLImpl   -->
+
+<:
+$module{extract} = {a => [{n => extract,
+			   d => ['ReplicationETLImpl-extract'],
+			   t => __SUCCESS__}]};
+
+$module{load} = {a => [{n => load,
+			d => ['ReplicationETLImpl-load'],
+			t => __SUCCESS__}]};
+
+$module{crawl} = {a => [{n => crawl,
+			 d => ['ReplicationETLImpl-crawl'],
+			 t => __SUCCESS__}]};
+
+:>
+
+<tasks>
+<:
+    for $m (values %module) {
+        print moduleHelpers::childTasks(%$m);
+    }
+:>
+</tasks>
+
+<actions>
+<:
+    for $m (values %module) {
+        print moduleHelpers::chainActions(%$m);
+    }
+:>
+</actions>
+
+<!-- end module.xml for ReplicationETLImpl -->
+
+

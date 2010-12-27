@@ -1,0 +1,40 @@
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+$moduleHelpers::SCOPED_MODULE = 'ProvideXETLImpl';
+
+:>
+
+<!-- begin module.xml for ProvideXETLImpl   -->
+
+<:
+
+
+$module{extract} = {a => [{n => extract,
+			   maxParallelism => "1",
+			   c => 'refreshMas90Table.pl -noRefresh',
+			   t => __SUCCESS__}]};
+
+
+:>
+
+<tasks>
+<:
+    for $m (values %module) {
+        print moduleHelpers::childTasks(%$m);
+    }
+:>
+</tasks>
+
+<actions>
+<:
+    for $m (values %module) {
+        print moduleHelpers::chainActions(%$m);
+    }
+:>
+</actions>
+
+<!-- end module.xml for ProvideXETLImpl -->
+
+

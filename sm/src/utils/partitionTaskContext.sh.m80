@@ -1,0 +1,82 @@
+m4_define(`SHELL',/bin/bash)m4_dnl ` -*-shell-script-*-
+m4_include(shell/shellScripts.m4)m4_dnl
+# $m80path = [{command => "m4", chmod => "+x" }]
+shell_load_functions(printmsg,cleanup,require,docmd,sshcommand,docmdqi)
+shell_exit_handler
+DIRECTORY=$(pwd)
+m4_changequote(!*!,*!*)
+
+sqlfunc () {
+    TMPFILE=${TMPFILE:-/tmp/${PROGNAME}.$$}
+    while getopts :idq c
+	do case $c in
+	    i) ignoreError=true;;
+	    q) quiet=true;;
+	    d) DEBUG=true;;
+	esac
+    done
+
+    if [ -n "${DEBUG}" ]; then
+	echo \*\*\* sqlplus code is :
+cat<<!
+$code
+!
+	echo \*\*\* end sqlplus code
+    fi
+
+    sqlout=
+    sqlplus -s $DATABASE_NAME <<! >/dev/null 2>&1
+    whenever oserror exit 3
+    whenever sqlerror exit 5
+    set echo off feedb off timi off pau off pages 0 lines 500 trimsp on
+    spool ${TMPFILE}.sqlfunc
+    ${code}
+    exit success
+!
+    RC=$?
+    
+    if [ -z "$ignoreError" ]; then
+	if [ $RC -ne 0 ]; then	
+	    cat ${TMPFILE}.sqlfunc
+	    cleanup 1 failure of $code
+	fi
+    else
+	if [ -z "${quiet}" ]; then	
+	    cat ${TMPFILE}.sqlfunc
+	    printmsg warning, failure of $code
+	fi
+    fi
+
+    if [ $RC -eq 0 ]; then
+	sqlout=$(cat ${TMPFILE}.sqlfunc)
+    fi
+    if [ -n "${DEBUG}" ]; then
+	echo \*\*\* sqlplus output is :
+	cat ${TMPFILE}.sqlfunc
+	echo \*\*\* end sqlplus output
+    fi
+    return $RC
+}
+
+# The Statemachine has to be shut down to do this
+sm_is_running=`ps aux | grep $M80_BDF | grep -v grep | wc -l`
+printmsg "The statemachine is running?: $sm_is_running"
+if test $sm_is_running -gt 0; then
+    printmsg The Statemachine is running in the $M80_BDF environment
+    printmsg Please stop the Statemachine and take it out of cron
+    printmsg Then try and run this script again
+else
+
+# run the sql statement against the db.
+ code="
+set serverout on
+set timi on
+exec dbms_output.enable(1000000);
+exec p_task_context.archive_table;
+ "
+ sqlfunc
+
+# regenerate the task_context_v;
+m80 --oldschool -t patch -m CONTROLLER_DB
+fi
+cleanup $?

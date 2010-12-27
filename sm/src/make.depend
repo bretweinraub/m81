@@ -1,0 +1,6 @@
+all default ::  ChainDB.pm debug.pm task.pm VariableExpander.pm xmlhelper.pm
+ChainDB.pm : ChainDB.pm.m4
+debug.pm : debug.pm.m4
+task.pm : task.pm.m4
+VariableExpander.pm : VariableExpander.pm.m4
+xmlhelper.pm : xmlhelper.pm.m4

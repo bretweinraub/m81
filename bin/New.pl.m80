@@ -1,0 +1,129 @@
+<: #-*- perl -*-
+
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => "New.pl",
+				   description => 'Front Door For Template Expansion Tools',
+                                   include => ['File::Basename',
+					       'Env'],
+                                   );
+print $ps->dump(); 
+print $ps->pod();
+:>
+ 
+BEGIN {
+    $NewHomeDirectory = dirname($0) . "/../New";
+
+    $ENV{PATH} .= ":$NewHomeDirectory:$NewHomeDirectory/utils";
+    $ENV{NEW} .= $NewHomeDirectory;
+}
+
+my $requestedNewEntity = shift;
+
+my $secondArg=$ARGV[0];                                                         # Generate a usage statement if this is "-h"
+
+printmsg BOLD . BLUE . "Requested new entity is $requestedNewEntity" . RESET;
+
+eval {
+    require "$NewHomeDirectory/manifest.pl";
+};
+
+Confess "$@" if $@;
+
+my @matches = ();                                                                                                    
+
+#
+# Build List of Matching Newables
+#
+foreach $Newable (@Newables) {                                        # iterate over list from manifest
+    push (@matches,$Newable)                                          # Add to matched List if there is regexp match
+	if $Newable->getName() =~ m/$requestedNewEntity/ ;  
+}                                                                     
+
+# No Match
+if ($#matches == -1) {
+    printmsgn RED . "Nothing matched $requestedNewEntity, maybe you meant one of these:\n" . RESET;
+    map { print $_->getName() . "\n"; } ( sort { $a->getName() cmp ($b->getName()) } @Newables); print "\n";
+    Confess "Nothing matched $requestedNewEntity";
+} elsif ($#matches > 0) {                                             # multiple matches                         
+    printmsgn RED . "Multiple entities matched $requestedNewEntity, maybe you meant one of these:\n" . RESET;
+    foreach (sort { $a->getName() cmp ($b->getName()) } @matches) {
+	my $obj=$_;
+	my $len = length($obj->getName());
+	my $tabs = abs((32 - $len) / 8);
+	print $obj->getName();
+	foreach (my $i = 0 ; $i < $tabs ; $i++) {
+	    print "\t";
+	}
+	print ":\t" . $obj->getDescription() . "\n";
+    } (); print "\n";
+    Confess "Multiples matched $requestedNewEntity";
+}
+
+my $Selected = $matches[0];
+
+printmsg BOLD . BLUE . "Checking options for matched entity " . $Selected->getName() . RESET;
+
+if ($secondArg =~ /-h/) {
+    printmsgn "Getopts are (tag marks the command line argument ... see " . BOLD . 'perldoc Getopt::Long' . RESET . " for more information:";
+    foreach $getopts (@{$Selected->getGetopts()}) {
+	my ($arg) = split (/:/, $getopts->{tag});
+	print GREEN . "-" . $arg . "\t:\t". BLUE . $getopts->{description} . RESET . "\n";
+    }
+    cleanup 0;
+}
+
+eval $Selected->getGetoptsStatement(@ARGV);                                         
+eval $Selected->getCallSignature();                                                                                                                                                                                                        
+=pod
+
+=head1 CALL SIGNATURE
+
+Typically you would use the shell function "New()".  See also B<portalPerfFunc.sh> for documentation of that function.
+
+=head1 MANIFEST FILE FORMAT
+
+The manifest for the new function can be found at: B<$TOP/New/manifest.pl>.  It should have a reasonably self
+explanatory format, as in:
+
+    use Newable;
+    
+    @Newables =
+        (
+         new Newable (name => "Interface Module",
+                      callSignature => 'docmd("m80 --execute expandTemplate.sh -m $module -t $TOP/templates/interfaceModule.tmpl.m80")',
+    		      getopts => [{tag => 'module:s',
+    			           variable => '$module',
+    			           nomy => 1,
+    			           description => 'Name of the new interface module'}]),
+         );
+    
+    1;
+
+
+So as is indicated above add a new "Newable" entity to the Newables array will add your template (regardless of how you implemented it)
+to the "New()" function.
+
+=head1 ARGUMENTS CHECKING
+
+New.pl does limited arguments checking for the script.  It uses the B<_getopts> method of the B<Helpers::PerlScript> to implement this.
+See the documentation for that class for more information.
+
+A simplistic usage message for any B<Newable> can be generated as follows:
+
+  New.pl <NewableName> -h
+
+or from the shell function New():
+
+  New <NewableName> -h
+
+=head1 SEE ALSO
+
+B<portalPerfFunc.sh>
+B<Newable.pm>
+B<PerlScript.pm>
+
+=cut
+
+cleanup 0; 

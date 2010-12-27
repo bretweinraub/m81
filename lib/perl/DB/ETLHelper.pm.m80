@@ -1,0 +1,153 @@
+<: #-*- perl -*- # $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "DB::ETLHelper",
+			           isa => '',
+                                   include => [DB::Table,
+					       DB::DBHandleFactory,
+					       DB::Utils,
+					       DB::DBHandle],
+                                   example =>
+q[
+    my $ETLHelper = $ETLHelper->new();   # stub example .... expand
+],
+				   description => 'ETLHelper description; stub description please expand');
+
+$po->setMembers([{name => "allObjects",
+		  description => "ETLHelper derives @allObjects from the environment",},
+		 {name => "sourceNamespace",
+		  description => "Source namespace for ETL source descriptor"},
+		 {name => "sourceTableName",
+		  description => "table name in the sourceNamespace for this ETL",},
+		 {name => "sourcePrimaryKey",
+		  description => "primary key name in the sourceNamespace for this ETL",},
+		 {name => "sourceHandle",
+		  ref => "DB::DBHandle",
+		  description => "DBHandle for the ETL source",},
+		 {name => "sourceTable",
+		  ref => "DB::Table",
+		  description => "metadata for the source ETL table",},
+		 {name => "targetNamespace",
+		  description => "target namespace for this ETL ",},
+		 {name => "targetHandle",
+		  ref => 'DB::DBHandle',
+		  description => "stub description of targetHandle; please update",},
+		 {name => "targetTableName",
+		  description => "stub description of targetTableName; please update",},
+		 {name => "stageTableName",
+		  description => "stub description of stageTableName; please update",},
+		 {name => "targetTable",
+		  description => "stub description of targetTable; please update",},
+		 {name => "stageTable",
+		  ref => "DB::Table",
+		  description => "stub description of stageTable; please update",},
+		 {name => "columnNameTranslators",
+		  description => "any column name translators specified in the metadata"},
+		 {name => 'noCreate',
+		  description => 'don\'t create table for this ETL',},
+		 {name => 'sourceHandleUnneeded',
+		  description => 'if set, don\'t bother connecting the source handle.  At a certain point ETL processes no longer need this connection, so this allows us to aviod needlessly connected to the source database.',},
+]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do { 
+	our @allObjects;
+
+	my $_x=$main::debug;
+	require "Metadata/LoadCollections.pl";
+	$main::debug=$_x;                                                                # LoadCollections.pl can mess with $main::debug ;
+
+	use strict;
+
+	my $sourceNamespace=$ENV{$ENV{sourceDB} . "_m80namespace"};
+	$this->setSourceNamespace($sourceNamespace);
+	Confess "failed to derive sourceNamespace"
+	    unless $sourceNamespace;
+
+	my $sourceTableName=$ENV{$ENV{sourceRD} . "_tableName"};
+	$this->setSourceTableName($sourceTableName);
+	Confess "failed to derive sourceTableName"
+	    unless $sourceTableName;
+
+	my $sourcePrimaryKey = $ENV{$ENV{sourceRD} . "_naturalKey"};
+	$this->setSourcePrimaryKey($sourcePrimaryKey);
+
+	my $sourceTable ;
+
+	unless ($this->getSourceHandleUnneeded()) {
+	    my $sourceHandle = DB::DBHandleFactory::newDBHandle(namespace => $sourceNamespace);
+	    $this->setSourceHandle($sourceHandle);
+	    Confess "failed to derive sourceHandle"
+		unless $sourceHandle;
+
+	    if ($sourcePrimaryKey) {
+		$sourceTable = $sourceHandle->newTable(name => $sourceTableName,
+						       primaryKeyName => $sourcePrimaryKey);
+	    } else {
+		$sourceTable = $sourceHandle->newTable(name => $sourceTableName);
+	    }
+	    
+	    $this->setSourceTable($sourceTable);
+	    Confess "failed to derive sourceTable"
+		unless $sourceTable;
+	}
+
+	my $targetNamespace=$ENV{$ENV{targetDB} . "_m80namespace"};
+	$this->setTargetNamespace($targetNamespace);
+	Confess "failed to derive targetNamespace"
+	    unless $targetNamespace;
+
+	my $targetHandle = DB::DBHandleFactory::newDBHandle(namespace => $targetNamespace);
+	$this->setTargetHandle($targetHandle);
+	Confess "failed to derive targetHandle"
+	    unless $targetHandle;
+
+	my $targetTableName=$ENV{$ENV{targetRD} . "_tableName"};
+	$this->setTargetTableName($targetTableName);
+	Confess "failed to derive targetTableName"
+	    unless $targetTableName;
+
+	my $stageTableName = $targetTableName . "_stg";
+	$this->setStageTableName($stageTableName);
+	Confess "failed to derive stageTableName"
+	    unless $stageTableName;
+
+	my $columnNameTranslators = $ENV{"columnNameTranslators"};
+	$this->setColumnNameTranslators($columnNameTranslators);	
+
+	$this->createETLTables()
+	    unless $this->getSourceHandleUnneeded();
+
+	my $targetTable = $targetHandle->newTable(name => $targetTableName);
+	$this->setTargetTable($targetTable);
+	Confess "failed to derive targetTable"
+	    unless $targetTable;
+
+	my $stageTable = $targetHandle->newTable(name => $stageTableName);
+	$this->setStageTable($stageTable);
+	Confess "failed to derive stageTable"
+	    unless $stageTable;
+
+	rectifySchemas(sourceTable => $sourceTable, targetTable => $stageTable);
+	rectifySchemas(sourceTable => $sourceTable, targetTable => $targetTable);
+    };
+}
+
+################################################################################
+
+sub createETLTables {
+   <:= $po->contract('createETLTables' => {description => 'creates the required staging and destination tables',
+					   getopts => []}); :>
+    do {
+	createTables(dbhandle => $this->getTargetHandle(), 
+		     sourceTable => $this->getSourceTable(), 
+		     columnNameTranslators => $this->getColumnNameTranslators(),
+		     targetTableNames => [$this->getTargetTableName(), $this->getStageTableName()]) unless $this->getNoCreate();
+
+    };
+}
+

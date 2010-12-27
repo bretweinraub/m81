@@ -1,0 +1,172 @@
+<: #-*- perl -*- # $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "Crawler::RTWBS",
+			           isa => '',
+                                   include => [],
+                                   example =>
+q[
+
+  my $crawler = Crawler::CrawlerBase(recordsToCrawl => \@recordsToCrawl,
+				     username => $username,
+				     password => $password,
+				     loginURL => $loginURL);
+
+  my $RTWBS = $Crawler::RTWBS->new(crawler => $crawler);   
+  $RTWBS->postProcess();
+],
+				   description => 'Plug-in for DBCrawler; contains WBS specific postprocess routine for post RT crawling');
+
+$po->setMembers([{name => "crawler",
+                  ref => 'Crawler::CrawlerBase',
+		  required => 1,
+                  description => "Crawler object"},
+		 {name => "dbhandle",
+                  ref => 'DB::DBHandle',
+		  required => 1,
+                  description => "database handle"},
+		 ]); 
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+}
+
+
+################################################################################
+
+sub postProcess {
+   <:= $po->contract('postProcess' => {description => 'after a record has beeen recrawled, regenerate sugar circuit, account, and contact maps',
+				       getopts => []}); :>
+   do {
+
+       my $dbhandle = $this->getDbhandle();
+
+       my $dbh = $dbhandle->getDbh();
+       my $RaiseError = $dbh->{RaiseError};                                    # save so as to replace later
+       my $AutoCommit = $dbh->{AutoCommit};                                    # save so as to replace later
+
+       $dbh->{RaiseError} = 1;
+       $dbh->{AutoCommit} = 0;                                                 # should perform better
+
+       my %circuits = %{$dbhandle->getData(sql => "select id, name, carrier_circuit_id_c, carrier_circuit_idno2_c from sugar_circuit where deleted = 0", lc => 1)};
+       my %accounts = %{$dbhandle->getData(sql => "select id, name from sugar_account where deleted = 0", lc => 1)};
+       my %contacts = %{$dbhandle->getData(sql => "select sugar_contact_id id, first_name, last_name, account_name from sugar_contact_v where deleted = 0", lc => 1)};
+
+       my $crawler = $this->getCrawler();
+
+       foreach my $crawlerRequest (@{$crawler->getRecordsToCrawl()}) {
+	   my $file = $crawlerRequest->getFile();
+
+	   my $rtid = $file;
+	   $rtid =~ s/.+?([0-9]+)\.html/$1/;
+	   $this->debugPrint(0, "processing ticket $rtid");
+
+	   Confess "bad crawlerRequest: " . Dumper($file)
+	       unless $file;
+
+	   $this->debugPrint(1, "reading $file");
+	   open DATA, "< $file" or
+	       do  {
+		   carp "can\'t open $file : $!";
+		   next; 
+	       };
+
+	   my $data;
+	   while (<DATA>) {
+	       $data .= $_;
+	   }
+
+	   $dbhandle->execute (sql => "delete from rt_circuit where rtticket_id = $rtid");
+
+	   for (my $idx = 0; $idx  < $circuits{rows}; $idx++) {
+	       my $id = $circuits{id}[$idx];
+	       my $name = $circuits{name}[$idx];
+	       next if $name =~ /test/;
+	       my $carrier_circuit_id_c = $circuits{carrier_circuit_id_c}[$idx];
+	       my $carrier_circuit_idno2_c = $circuits{carrier_circuit_idno2_c}[$idx];
+
+	       Confess "fatal error , no name in circuit data"
+		   unless $name;
+
+	       my $_name = $name;
+	       my $_carrier_circuit_idno2_c = $carrier_circuit_idno2_c;
+	       my $_carrier_circuit_id_c = $carrier_circuit_id_c;
+
+	       $_name =~ s/([\/\(\)])/\\$1/g;
+	       $_carrier_circuit_id_c =~ s/([\/\(\)])/\\$1/g;
+	       $_carrier_circuit_idno2_c =~ s/([\/\(\)])/\\$1/g;
+
+	       eval {
+		   if ($data =~ /$_name/i ||
+		       ($carrier_circuit_id_c and 
+			$data =~ /$_carrier_circuit_id_c/i and
+			$carrier_circuit_id_c !~ /WBS Connect/) ||
+		       ($carrier_circuit_idno2_c and
+			$data =~ /$_carrier_circuit_idno2_c/i)) {
+		       $this->debugPrint(0, "YES: $rtid matches $name - $carrier_circuit_id_c  - $carrier_circuit_idno2_c");
+		       $dbhandle->execute (sql => "insert into rt_circuit (rtticket_id, sugar_circuit_id) values ($rtid, '$id')");
+		   } else {
+		       $this->debugPrint(1, "NO: $rtid matches $name");	    
+		   }
+	       };
+	       Confess "\$name: $name ; \$carrier_circuit_id_c : $carrier_circuit_id_c ; \$carrier_circuit_idno2_c : $carrier_circuit_idno2_c : $@"
+		   if $@;
+	   }
+	   $dbhandle->execute (sql => "delete from rt_account where rtticket_id = $rtid");
+
+	   for (my $idx = 0; $idx  < $accounts{rows}; $idx++) {
+
+	       my $name = $accounts{name}[$idx];
+	       my $id = $accounts{id}[$idx];
+
+	       if ($name) {
+		   if ($data =~ /$name/) {
+		       $this->debugPrint(0, "YES: $rtid matches account $name");
+		       $dbhandle->execute (sql => "insert into rt_account (rtticket_id, sugar_account_id) values ($rtid, '$id')");
+		   } else {
+		       $this->debugPrint(1, "NO: $rtid matches $name");	    
+		   }
+	       }
+	   }
+
+	   $dbhandle->execute (sql => "delete from rt_contact where rtticket_id = $rtid");
+
+	   for (my $idx = 0; $idx  < $contacts{rows}; $idx++) {
+	       my $id = $contacts{id}[$idx];
+	       my $account_name = $contacts{account_name}[$idx];
+	       my $first_name = $contacts{first_name}[$idx];
+	       my $last_name = $contacts{last_name}[$idx];
+
+	       eval {
+		   $first_name =~ s/\s//g;
+		   $last_name =~ s/\s//g;
+	       };
+	       Confess "$first_name $last_name: $@" if $@;
+
+	       if ($first_name and $last_name
+		   and $first_name !~ /\?/ and $last_name !~ /\?/) {
+		   eval {
+		       if ($data =~ /$first_name\s+$last_name/i) {
+			   $this->debugPrint(0, "YES: $rtid matches contact $first_name $last_name ($account_name)");
+			   $dbhandle->execute (sql => "insert into rt_contact (rtticket_id, sugar_contact_id) values ($rtid, '$id')");
+		       } else {
+			   $this->debugPrint(1, "NO: $rtid matches $first_name $last_name");	    
+		       }
+		   };
+		   Confess "$@: $first_name $last_name" if $@;
+	       }
+	   }
+	   close DATA;
+
+	   $dbh->commit();
+        }
+
+       $dbh->{RaiseError} = $RaiseError;                                       # restore old value for this
+       $dbh->{AutoCommit} = $AutoCommit;                                       # restore old value for this
+   };
+
+}
+
+

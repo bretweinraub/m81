@@ -1,0 +1,20 @@
+<: #-*- perl -*- # $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'extractData.pl' , 
+                                   description => 'description for extractData',
+                                   include => [DB::ETLHelper],
+                                   getopts => [
+#  					       { tag => 'someTag:s',
+#                                                required => 't',
+#                                                default => '1'
+#                                                description => 'description of someTag',},
+					       ],
+                                   );
+print $ps->dump() . $ps->pod();
+:>
+ 
+
+my $etlhelper = DB::ETLHelper->new();
+
+cleanup 0; # "

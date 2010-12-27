@@ -1,0 +1,98 @@
+<: #-*- perl -*- # $m80path = [{ command => embedperl, chmod => '+x' }]
+
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'WBSSolorWindsPostProcess.pl' , 
+                                   description => '',
+                                   include => [DB::DBHandleFactory],
+                                   getopts => [
+# 					       { tag => '',
+#                                                 required => 't',
+#                                                 description => '',},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+use strict;
+my $dbhandle = DB::DBHandleFactory::newDBHandle();
+my %interfaces = %{$dbhandle->getData(sql => "select interfaceid, interfacealias from sw_interface",)};
+my %circuits = %{$dbhandle->getData(sql => "select id, name from sugar_circuit where deleted = 0")};
+my %sw_interface_circuits = %{$dbhandle->getData(sql => "select interfaceid, sugar_circuit_id from sw_interface_circuit")};
+
+my %existing;                                                                   # tracks the current records.
+
+for (my $idx = 0; $idx  < $sw_interface_circuits{rows}; $idx++) {
+    my $interfaceid = $sw_interface_circuits{INTERFACEID}[$idx];
+    my $sugar_circuit_id = $sw_interface_circuits{SUGAR_CIRCUIT_ID}[$idx];
+
+    $existing{$interfaceid} = $sugar_circuit_id;
+}
+
+my $dbh = $dbhandle->getDbh();
+$dbh->{RaiseError} = 1;
+$dbh->{AutoCommit} = 0;                                                        # should perform better
+
+my %_circuits = ();
+
+for (my $idx = 0; $idx  < $circuits{rows}; $idx++) {
+    my $name = $circuits{NAME}[$idx];
+    my $id = $circuits{ID}[$idx];
+
+    $_circuits{$name} = $id;
+
+    debugPrint(2, "looked up $name");
+}
+
+my %matches = ();
+my %misses = ();
+
+for (my $ndx = 0; $ndx  < $interfaces{rows}; $ndx++) {
+
+    my $interfacealias = $interfaces{INTERFACEALIAS}[$ndx];
+    my $interfaceid = $interfaces{INTERFACEID}[$ndx];
+
+    $interfacealias =~ s/\s//g;
+
+    next unless $interfacealias;
+
+    debugPrint(0, "evaluating $interfacealias");
+
+    $interfacealias =~ s/(.+?)-.*//g;
+
+    if ($_circuits{$interfacealias}) {
+	debugPrint(0, "$interfacealias : " . $_circuits{$interfacealias});
+	$matches{$interfacealias} = { sugar_circuit_id => $_circuits{$interfacealias},
+				      interfaceid => $interfaceid };
+    } else {
+	$misses{$interfaceid} = 1;
+	debugPrint(1, "NO MATCH for $interfacealias");
+    }
+}
+
+foreach my $key (keys(%matches)) {
+    my $interfacealias = $key;
+    my $sugar_circuit_id = $matches{$key}->{sugar_circuit_id};
+    my $interfaceid = $matches{$key}->{interfaceid};
+    debugPrint(1, "examing match $key($interfaceid) : $sugar_circuit_id");
+
+    if ($existing{$interfaceid} eq $sugar_circuit_id) {
+	debugPrint(0, "existing db record for this match, skipping");
+    } else {
+	debugPrint(0, "writing db record as no existing match ");
+	$dbhandle->execute (sql => "insert into sw_interface_circuit (interfaceid, sugar_circuit_id) values ($interfaceid, '$sugar_circuit_id')");
+    }
+}
+
+foreach my $miss (keys(%misses)) {
+    my $interfaceid = $miss;
+    debugPrint(1, "examing miss $miss");
+    if ($existing{$interfaceid}) {
+	debugPrint(1, "found existing records for this interface id");
+	$dbhandle->execute (sql => "delete from sw_interface_circuit where interfaceid = $interfaceid");
+    }
+}
+
+$dbh->commit();
+ 
+cleanup 0; 

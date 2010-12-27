@@ -1,0 +1,51 @@
+  <tasks>
+    <task name="netTest"
+	  requiredData="$(task.host) $(task.user) $(task.directory) $(task.xmlfile)"
+	  startAction="fetchXML"/>
+
+    <task name="doPushChild"
+	  requiredData="$(task.xmlfile) $(task.xpath)"
+	  startAction="doPushChild"/>
+  </tasks>
+  <actions>
+    <action name="fetchXML"
+	    exportTaskMetaData="true"
+	    command="(cd $(env.TM_deployDir)/TM ; make -f Makefile.control fetchXML)">
+      <transitionMap>
+	<transition type="returnCode" value="0" code="$thistask->transitionTo('post-fetchXML-' . $thistask->getProperty(taskname))"/>
+	<transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(__FAILED__))"/>
+      </transitionMap>
+    </action>
+
+    <action name="post-fetchXML-netTest" 
+	    exportTaskMetaData="true"
+	    command="(cd $(env.TM_deployDir)/TM ; make -f Makefile.control createTarBall)">
+      <transitionMap>
+	<transition type="returnCode" value="0" code="$thistask->transitionTo('doPushParent')"/>
+	<transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(__FAILED__))"/>
+      </transitionMap>
+    </action>
+
+    <action name="doPushParent" 
+	    exportTaskMetaData="true"
+	    parent="true"
+	    command="$(env.AutomationControllerDir)/utils/spawnChildTasks.pl -xmlfile $(task.LocalStageDir)/$(task.xmlfile) -childTaskName doPushChild -xpath /networkConfig/host -attributeName name">
+      <transitionMap>
+	<transition type="parent" value="ALLSUCCESS" code="$thistask->transitionTo(q(__SUCCESS__))"/>
+	<transition type="parent" value="ANYFAIL" code="$thistask->transitionTo(q(__FAILED__))"/>
+	<transition type="returnCode" value="0" code="$thistask->transitionTo(q(__WAITING__))"/>
+	<transition type="returnCode" value="1" code="$thistask->transitionTo(q(__SUCCESS__))"/>
+	<transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(__FAILED__))"/>
+      </transitionMap>
+    </action>
+    
+    <action name="doPushChild"
+	    exportTaskMetaData="true"
+	    command="(cd /tmp ; env)">
+      <transitionMap>
+	<transition type="returnCode" value="0" code="$thistask->transitionTo(q(__SUCCESS__))"/>
+	<transition type="returnCode" value="\d+" code="$thistask->transitionTo(q(__FAILED__))"/>
+      </transitionMap>
+    </action>
+	    
+  </actions>

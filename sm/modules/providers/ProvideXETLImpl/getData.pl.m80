@@ -1,0 +1,77 @@
+<: #-*- perl -*-
+# $m80path = [{ command => embedperl, chmod => '+x' }]
+use Helpers::PerlScript;
+
+my $ps = Helpers::PerlScript->new( name => 'getData.pl' , 
+                                   description => '',
+                                   include => [DB::DBHandleFactory,
+					       DB::RowSet,
+					       DB::ProvideXHandle],
+                                   getopts => [
+# 					       {tag => "user:s",
+# 						required => "mas90 user"},
+# 					       {tag => "password:s",
+# 						required => "mas90 password"},
+# 					       {tag => "sid:s",
+# 						required => "mas90 sif"},
+					       ],
+                                   );
+print $ps->dump(); print $ps->pod();
+:>
+
+my $dbhandle = DB::ProvideXHandle->new(user => "bweinraub",
+				       SID => "SOTAMAS90_silent",
+				       password => "wbs123!!");
+
+my $dbh = $dbhandle->getDbh();
+
+$dbh->{LongReadLen} = 147483647; 
+
+my @tableList = ();
+
+for (my $i = 0 ; $i <= $#ARGV ; $i++) {
+
+    my $tn = $ARGV[$i];
+
+    push (@tableList, $tn);
+
+    debugPrint(0,"loading table record for $tn");
+
+    my $table = DB::Table->new (handle => $dbhandle,
+				name => $tn);
+
+    my @table;
+    push (@table,$table);
+
+    my $_table = Data::Dumper->new(\@table);
+    $_table->Purity(1);
+    $_table->Varname($tn . "_table");
+
+    my $rs = DB::RowSet->new (dbh => $dbh,
+			      lc => 1, # force lower case field names.
+			      sql => "select * from $tn");
+
+
+    my %results = %{$rs->getResults()};                                         # 
+
+    my  @data;
+    push(@data,\%results);
+
+    my $dumper = Data::Dumper->new (\@data);
+    $dumper->Purity(1);
+    $dumper->Varname($tn . "_data");
+    print $dumper->Dump();
+    print $_table->Dump();
+    debugPrint(0,"end dumping table record for $tn");
+}
+
+my @_tableList = ();
+push (@_tableList, \@tableList);
+
+my $_tableList = Data::Dumper->new (\@_tableList);
+$_tableList->Purity(1);
+$_tableList->Varname("tableList");
+print $_tableList->Dump();
+
+exit 0;
+

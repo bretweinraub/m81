@@ -1,0 +1,58 @@
+<: # -*-perl-*- 
+#  $m80path = [{command => "embedperl.pl"}]
+use Helpers::moduleHelpers;
+
+$moduleHelpers::SCOPED_MODULE = 'ReplicationETLImpl';
+:>
+
+<!-- begin module.xml for ReplicationETLImpl   -->
+
+<:
+$module{extract} = {a => [{n => extract,
+			   c => 'extractData.pl',
+			   t => __SUCCESS__}]};
+
+
+$module{stage} = {a => [{n => stage,
+                          c => 'exit 0',
+                          t => __SUCCESS__}]};
+
+
+$module{transform} = {a => [{n => transform,
+                          c => 'exit 0',
+                          t => __SUCCESS__}]};
+
+
+$module{load} = {a => [{n => load,
+			c => 'loadData.pl',
+			t => __SUCCESS__}]};
+
+$module{crawl} = {a => [{n => crawl,
+			 c => 'doCrawl.sh',
+			 t => __SUCCESS__}]};
+
+# $module{postprocess} = {a => [{n => postprocess,
+# 			       c => 'doCrawl.sh',
+# 			       t => __SUCCESS__}]};
+
+:>
+
+<tasks>
+<:
+    for $m (values %module) {
+        print moduleHelpers::childTasks(%$m);
+    }
+:>
+</tasks>
+
+<actions>
+<:
+    for $m (values %module) {
+        print moduleHelpers::chainActions(%$m);
+    }
+:>
+</actions>
+
+<!-- end module.xml for ReplicationETLImpl -->
+
+

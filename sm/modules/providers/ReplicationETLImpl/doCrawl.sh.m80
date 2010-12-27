@@ -1,0 +1,22 @@
+<: # -*-sh-*-
+use Helpers::shellHelpers; # $m80path = [{command => "embedperl"}, {command => "m4", chmod => "+x" }];
+print Helpers::shellHelpers::shellScript ( r => [],
+                                           getopts => '(-d,debug)'); 
+:>
+
+### call DBCrawler if configured to do so.
+
+if [ -n "$crawlConfig" ]; then
+    printmsg found a crawler config of $crawlConfig
+    if [ -n "${debug}" ]; then
+	docmd perl -d:ptkdb $(which DBCrawler.pl) -config $crawlConfig
+    else
+	docmd DBCrawler.pl -config $crawlConfig
+    fi
+else
+    printmsg no crawl config specified, skipping
+fi
+
+cleanup 0
+
+    
