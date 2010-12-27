@@ -17,6 +17,7 @@ cat > m81loader.sh <<EOF
 . $path/m81shell.sh
 export M81_HOME=$path
 export PERL5LIB=$path/lib/perl
+export PATH=\$PATH:$path/bin
 
 
 EOF
