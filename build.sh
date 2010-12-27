@@ -1,6 +1,7 @@
 #!/bin/bash
 
 ./configure.sh
+export M81_HOME=$(pwd)
 PERL5LIB=$(pwd)/lib/perl make -k
 
 cat <<EOF
