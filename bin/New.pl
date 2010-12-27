@@ -113,8 +113,8 @@ Front Door For Template Expansion Tools
 This script was generated with the Helpers::PerlScript pre-compiler.
 
 This file was automatically generated from the file: New.pl.m80 by
-bret on  (Linux ubuntu 2.6.31-19-generic-pae #56-Ubuntu SMP Thu Jan 28 02:29:51 UTC 2010 i686 GNU/Linux
-) on Wed Feb 17 01:17:14 2010.
+bweinraub on  (Linux li264-192 2.6.35.4-x86_64-linode16 #1 SMP Mon Sep 20 16:03:34 UTC 2010 x86_64 GNU/Linux
+) on Mon Dec 27 18:27:46 2010.
 
 The following functions are included by default. The functions all have 
 prototypes that make the parens optional.
