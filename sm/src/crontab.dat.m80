@@ -23,7 +23,7 @@ for my $k (grep { /$target/ } keys %ENV) {
 #
 * * * * * env QUIET=true ORACLE_HOME=<:= $ORACLE_HOME :> LD_LIBRARY_PATH=<:=$LD_LIBRARY_PATH:> PATH=$PATH:/usr/local/m80-0.07/bin <:
     if ($ENV{M80_REPOSITORY_deploy_PATH}) {
-	:>M80_REPOSITORY=<:= $ENV{CONTROLLER_DEPLOY_BASE} :>/m80repository <:} else { :> M80_REPOSITORY=<:= $ENV{M80_REPOSITORY} :> <: } :> M80_BDF=<:= $ENV{M80_BDF} :>  m80 --execute "cd \$CONTROLLER_DEPLOY_DIR && ./automator.pl -quiet -config ./generatedConfig.xml.m80 -debug 1 -maxLoops 1000 -logDir \$CONTROLLER_DEPLOY_DIR/logs -sleep 15"
+	:>M80_REPOSITORY=<:= $ENV{CONTROLLER_DEPLOY_BASE} :>/m80repository <:} else { :> M80_REPOSITORY=<:= $ENV{M80_REPOSITORY} :> <: } :> M80_BDF=<:= $ENV{M80_BDF} :>  m80 --execute "cd \$CONTROLLER_DEPLOY_DIR && ./automator.pl -quiet -config ./config/generatedConfig.xml.m80 -debug 1 -maxLoops 1000 -logDir \$CONTROLLER_DEPLOY_DIR/logs -sleep 15"
 # 
 # Check and see that there is only 1 automator running
 #

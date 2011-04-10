@@ -55,5 +55,5 @@ sub no_looping {
 }
 :>
 
-env QUIET=true ORACLE_HOME=<:= $ENV{ORACLE_HOME} :> <:=m80pathinfo():> <:=m80repoinfo:> M80_BDF=<:= $ENV{M80_BDF} :>  m80 --execute "cd \$CONTROLLER_DEPLOY_DIR && ./automator.pl -config ./generatedConfig.xml.m80 <:=useDefaultShellCommand:> -debug <:=debugLevel:> <:=no_looping():> -sleep 3 -lock /data/deployments/$M80_BDF/ -logDir /data/deployments/$M80_BDF/StateMachine/logs" $*
+env QUIET=true ORACLE_HOME=<:= $ENV{ORACLE_HOME} :> <:=m80pathinfo():> <:=m80repoinfo:> M80_BDF=<:= $ENV{M80_BDF} :>  m80 --execute "cd \$CONTROLLER_DEPLOY_DIR && ./automator.pl -config ./config/generatedConfig.xml.m80 <:=useDefaultShellCommand:> -debug <:=debugLevel:> <:=no_looping():> -sleep 3 -lock /data/deployments/$M80_BDF/ -logDir /data/deployments/$M80_BDF/StateMachine/logs" $*
 

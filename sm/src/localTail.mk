@@ -4,7 +4,7 @@
 #
 #
 
-binfiles	=	.headrevision *.pl *.pm utils/*.{pm,pl,sh,sql} generatedConfig.xml.m80 *.dat startSM
+binfiles	=	.headrevision *.pl *.pm utils/*.{pm,pl,sh,sql} *.dat startSM config
 distname	=	StateMachine
 majorVersion	=	0.03
 
@@ -27,9 +27,9 @@ SUPPRESS_VC	=	true
 %.pm	:	%.pm.m80
 	runPath.pl -file $< -dest $@
 
-deploy	::	clean generatedConfig.xml.m80 crontab.dat startSM
+deploy	::	clean crontab.dat startSM
 
-clean	::;	rm -f startSM generatedConfig.xml generatedConfig.xml.m80
+clean	::;	rm -f startSM generatedConfig.xml
 
 raws = $(wildcard *.raw)
 profs = $(raws:.raw=.sort)

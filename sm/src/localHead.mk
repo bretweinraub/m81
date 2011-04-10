@@ -97,21 +97,6 @@ m4command :; echo $(M4) $(M4_FLAGS)
 # we need to rectify this.
 #
 
-
-#generate_p4_headrevision ::
-#	files=$$(cd $$CONTROLLER_deploy_PATH && p4 files ...) ; \
-#	if test -n "$$files"; then \
-#		(cd $$CONTROLLER_deploy_PATH && p4 changes -m 1 ... | cut -d' ' -f2) > $$CONTROLLER_deploy_PATH/.headrevision ; \
-#	else \
-#		printmsg no p4 data for this modules ... no manifest will be generated ; \
-#	fi
-#
-#
-
-all deploy	:: ContextExporter.pm
-	(cd utils; make)
-	(cd testMachine; make)
-
 include ../../m81.mk
 
 
@@ -170,4 +155,8 @@ clean	::; rm -f $(Scripts)
 
 test	::; echo $(Scripts)
 
+
+all deploy	:: ContextExporter.pm
+	(cd utils; make)
+	(cd testMachine; make)
 
