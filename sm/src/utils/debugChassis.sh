@@ -199,18 +199,17 @@ unset QUIET
 
 usage () {
   printmsg  I am unhappy ...... a usage message follows for your benefit
-  printmsg  Usage is -c {command} -t {task_id} -r {reload=TRUE} -s {suppressdump=TRUE} -a {action_id} -A {allowallenvs=TRUE} 
+  printmsg  Usage is -t {task_id} -r {reload=TRUE} -s {suppressdump=TRUE} -a {action_id} -A {allowallenvs=TRUE} 
 
-printmsg  Required variables: command 
+printmsg command can be run with no arguments if one choses
 
 
   cleanup 1
 } 
 
 OPTIND=0
-while getopts :c:t:rsa:A c 
+while getopts :t:rsa:A c 
     do case $c in        
-	c) export command=$OPTARG;;
 	t) export task_id=$OPTARG;;
 	r) export reload=TRUE;;
 	s) export suppressdump=TRUE;;
@@ -236,12 +235,6 @@ done
 
 
 
-
-
-test -z "${command}" && {
-	printmsg missing value for command
-	usage
-}
 
 
 
@@ -286,10 +279,7 @@ fi
 
 . /tmp/$PROGNAME.$internal_id
 
-if [ $command = "eval" ]; then
-    eval $COMMAND
-else
-    printmsg unknown command
-fi
+
+eval $COMMAND
 
 cleanup $?

@@ -976,9 +976,11 @@ sub reap {
 # TODO: If there is only one transition this will not be an array.....
 #
 
-	$actionsTaken += &processTransitions(ThisXMLActionHash => $ThisXMLActionHash,
-					     reapObject => $reapObject,
-					     thistask => $thistask);
+	if ( ! $thistask->{status} =~ /cancel/) { # nah; don't bother
+	    $actionsTaken += &processTransitions(ThisXMLActionHash => $ThisXMLActionHash,
+						 reapObject => $reapObject,
+						 thistask => $thistask);
+	}
 					     
     }
     $stop = "true" if $once;
@@ -1564,6 +1566,7 @@ sub cancelRunningTask {
 	my $actionpid = $tasksToKill{ACTIONPID}[$i];
 
 	if ($status =~ /running/) {
+	    doCancel($task_id);
 	    _cancelrunningtask($task_id,$actionpid) 
 	} elsif ($status =~ /waiting/) {
 	    doCancel($task_id, 1);
@@ -1571,7 +1574,10 @@ sub cancelRunningTask {
 	    doCancel($task_id);
 	} elsif ($status =~ /new/) {
 	    doCancel($task_id);
+	} elsif ($status =~ /error/) {
+	    doCancel($task_id);
 	}
+
     }
 
     return "success";
