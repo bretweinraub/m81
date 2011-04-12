@@ -111,6 +111,8 @@ sub _header {
 
     my $ret = '#!/usr/bin/perl
 
+my @SAVE_ARGS=@ARGV;
+
 use Carp;
 use Getopt::Long;
 use Data::Dumper;

@@ -20,6 +20,7 @@ GetOptions("task:s" => \$task,
 	   "width:i" => \$awidth,
 	   "summary" => \$summary,
 	   "html" => \$html,
+#	   "ShowSql" => \$showSql,
            'noQueued' => \$noQueued,
 	   "id:s" => \$id);
 
@@ -182,7 +183,8 @@ order	by r";
 	$sql .= " desc" if $flip;
     }
 
-    
+
+    print $sql if $debug;
     dbutil::loadSQL ($dbh, $sql, \%ret, $debug);
 
     system("clear") if $refresh;

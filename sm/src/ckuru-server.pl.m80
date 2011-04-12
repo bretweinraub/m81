@@ -3,84 +3,86 @@
 use Helpers::PerlScript;
 use strict;
 
-my $ps = Helpers::PerlScript->new( name => 'ckuru-server' , 
-                                   description => 'description for ckuru-server',
-                                   include => ['lib dirname($0)',
-					       'lib dirname($0) . "/utils"',
-					       'lib dirname($0) . "src/utils"',
-					       'Fcntl ":flock"',
-					       'CkuruServer::Debug',
-					       'xmlhelper',
-					       'ChainDB',
-					       'task',
-					       'VariableExpander',
-					       'assert',
-					       'autoUtil',
-					       'ContextExporter',
-					       'POSIX ":sys_wait_h"',
-					       'POSIX qw(setsid)',
-					       'Net::SMTP',
-					       'Sys::Hostname',
-					       're "eval"',
-					       'Time::HiRes qw( usleep ualarm gettimeofday tv_interval )',
-					       'Proc::ProcWrapper',
-					       'Utils::SleepTimer',
-					       'Utils::PerlTools',
-					       ],
-                                   getopts => [{tag => "logDir:s",
-						description => "directory to write logs into.  No log files are created if this not set."},
-					       {tag => 'configFile:s',
-						required => 't',
-						default => "./config/generatedConfig.xml.m80",
-						description => 'Specifies the config file used by the automator.  This file can optionally contain any of templating directives available within m80.',},
-					       {tag => 'DebugLevel:i',
-						default => 1,
-						description => 'Specifies the debugging level; higher means more output.  Typically a level of one is appropriate.',},
-					       {tag => 'childDebugLevel:i',
-						description => 'Specifies the debugging level of all spawned children; higher means more output.  Typically a level of one is appropriate.',},
-					       {tag => 'echo',
-						description => 'Specifies the debugging level; higher means more output.  Typically a level of one is appropriate.',},
-					       {tag => 'quiet',
-						description => 'Suppress error reporting.  Especially useful when running from cron and you want to suppress repitive "unable to obtain exclusive lock" messages',},
-					       {tag => 'sleep:s',
-						default => 1,
-						description => 'Allows you to set how long the automator will sleep between build loops.  The automator only sleeps if on actions were taken in the current build loop.',},
-					       {tag => 'lockdir:s',
-						default => "dirname($0)",
-						description => 'Use this directory for the lock files (defaults to current working directory).',},
-					       {tag => "MapDebug:s",
-						description => 'You can additional debugging around a the mapping of variables that match a  particular regular expression.  For
+my $ps = Helpers::PerlScript->new(
+ name => 'ckuru-server' , 
+    description => 'description for ckuru-server',
+    include => ['lib dirname($0)',
+		'lib dirname($0) . "/utils"',
+		'lib dirname($0) . "src/utils"',
+		'Fcntl ":flock"',
+		'CkuruServer::Debug',
+		'xmlhelper',
+		'ChainDB',
+		'task',
+		'VariableExpander',
+		'assert',
+		'autoUtil',
+		'ContextExporter',
+		'POSIX ":sys_wait_h"',
+		'POSIX qw(setsid)',
+		'Net::SMTP',
+		'Sys::Hostname',
+		're "eval"',
+		'Time::HiRes qw( usleep ualarm gettimeofday tv_interval )',
+		'Proc::ProcWrapper',
+		'Utils::SleepTimer',
+		'Utils::PerlTools',
+    ],
+    getopts => [{tag => "logDir:s",
+		 description => "directory to write logs into.  No log files are created if this not set."},
+		{tag => 'configFile:s',
+		 required => 't',
+		 default => "./config/generatedConfig.xml.m80",
+		 description => 'Specifies the config file used by the automator.  This file can optionally contain any of templating directives available within m80.',},
+		{tag => 'DebugLevel:i',
+		 default => 1,
+		 description => 'Specifies the debugging level; higher means more output.  Typically a level of one is appropriate.',},
+		{tag => 'childDebugLevel:i',
+		 description => 'Specifies the debugging level of all spawned children; higher means more output.  Typically a level of one is appropriate.',},
+		{tag => 'echo',
+		 description => 'Specifies the debugging level; higher means more output.  Typically a level of one is appropriate.',},
+		{tag => 'quiet',
+		 description => 'Suppress error reporting.  Especially useful when running from cron and you want to suppress repitive "unable to obtain exclusive lock" messages',},
+		{tag => 'sleep:s',
+		 default => 1,
+		 description => 'Allows you to set how long the automator will sleep between build loops.  The automator only sleeps if on actions were taken in the current build loop.',},
+		{tag => 'lockdir:s',
+		 default => "dirname($0)",
+		 description => 'Use this directory for the lock files (defaults to current working directory).',},
+		{tag => "MapDebug:s",
+		 description => 'You can additional debugging around a the mapping of variables that match a  particular regular expression.  For
 example:
 
   automator.pl -MapDebug M80_BDF
 
 will mean additional log messages will be generated when mapping variables that contain M80_BDF in their tag.
 ',},
-					       {tag => "suppressParents",
-						description => 'suppress parent/child processing.  This argument may be removed a future date.',},
-					       {tag => "smtpServer",
-						description => 'This is required to send spam email related to task failures.  The spam address is the set in the 
+		{tag => "suppressParents",
+		 description => 'suppress parent/child processing.  This argument may be removed a future date.',},
+		{tag => "smtpServer",
+		 description => 'This is required to send spam email related to task failures.  The spam address is the set in the 
 <ChainGang AdminAddress="$(env.CONTROLLER_SPAM_ADDRESS)"> XML element in the config file.',},
-					       {tag => "dumpxml",
-						description => 'dump full expanded configuration file and exit',},
-					       {tag => "printIdentityPath",
-						description => 'prints out the server identity file and exists',},
-					       {tag => "group:s",
-						description => 'set the group for this server.  Can be used to run multiple servers on the same schema',},
-					       {tag => "expansionStyle",
-						default => "traditional",
-						description => 'set the expansionStyle for the config file.  Currently only one is defined.',},
-					       {tag => "exitWhenIdle",
-						description => 'exit if there are no active tasks',},
-					       {tag => "maxLoops:s",
-						description => 'exit after a set number of main loops',},
-					       {tag => "deleteEnv:s",
-						description => 'consider arguments as a list; delete all elements from running environment ',},
-					       ],
+		{tag => "dumpxml",
+		 description => 'dump full expanded configuration file and exit',},
+		{tag => "printIdentityPath",
+		 description => 'prints out the server identity file and exists',},
+		{tag => "group:s",
+		 description => 'set the group for this server.  Can be used to run multiple servers on the same schema',},
+		{tag => "expansionStyle",
+		 default => "traditional",
+		 description => 'set the expansionStyle for the config file.  Currently only one is defined.',},
+		{tag => "exitWhenIdle",
+		 description => 'exit if there are no active tasks',},
+		{tag => "maxLoops:s",
+		 description => 'exit after a set number of main loops',},
+		{tag => "deleteEnv:s",
+		 description => 'consider arguments as a list; delete all elements from running environment ',},
+    ],
+    );
 
-                                   );
 print $ps->dump(); print $ps->pod();
 :>
+
 
 sub TV_INTERVAL {
     my ($t0,$t1) = @_;
@@ -1633,6 +1635,53 @@ system ("touch $runningFile");
 
 debug(1, "state machine $identityFileBaseName is RUNNING");
 debug(1, "server start took " . tv_interval ( $startTime, [gettimeofday]) . " seconds");
+
+#
+# record myself in the script_log
+#
+
+if (dirname($0) =~ /^\./) {
+    $script_dir=`pwd`;
+    chomp($dir);
+} else {
+    $script_dir = dirname($0);
+}
+
+$all_args = "";
+
+foreach $arg (@SAVE_ARGS) {
+    $all_args .= "$arg ";
+}
+
+eval {
+    $db->runSQL("
+insert into script_info(
+id,
+name,
+pid,
+full_path,
+lock_file,
+arguments,
+process_group,
+created_at
+) 
+values (
+SCRIPT_INFO_SEQ.nextVal,
+'" . basename($0) . "',
+$$,
+'" . $script_dir . "',
+'" . $identityFileBaseName . "',
+'" . $all_args . "',
+" . $pw->getPgrp() . ",
+sysdate
+)
+");
+} or do {
+    confess "$@";
+};
+	
+
+
 
 while (! $stop) {
 #

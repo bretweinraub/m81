@@ -1,7 +1,7 @@
 <@ # $m80path = [{command => "embedperl.pl  -embedderChar @" , }] -*-xml-*- 
 @><!-- $m80path = [{command => "embedperl.pl" , cat => true}] -->
 <ChainGang name="$(env.M80_BDF)" 
-	   wwwroot="/var/www/html/$(env.M80_BDF)/taskData"
+	   wwwroot="/var/www/$(env.M80_BDF)/taskData"
 	   urlbase="/$(env.M80_BDF)/taskData"
 	   stageDir="/data/deployments/$(env.M80_BDF)/stage"
 	   AdminAddress="$(env.CONTROLLER_SPAM_ADDRESS)">

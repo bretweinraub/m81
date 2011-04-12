@@ -23,6 +23,7 @@ module Popparser
       return_value = nil
       unless return_value = @@rails_root
         ["#{ENV['TOP']}/rails", 
+         "#{ENV['RAILS_ROOT']}",
          "#{ENV['TOP']}/portal/rails",
          "#{ENV['Portal_srcPath']}",
          "#{ENV['Portal_destPath']}"].each do |candidate_for_rails_root|

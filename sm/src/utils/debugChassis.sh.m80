@@ -1,7 +1,7 @@
 # -*-shell-script-*-
 <: 
 use shellHelpers; # $m80path = [{command => "embedperl.pl"}, {command => "m4", chmod => "+x" }];
-print shellHelpers::shellScript ( r => [], getopts => "(c, -command), (t, task_id),(-r,reload),(-s,suppressdump),(a,action_id),(-A,allowallenvs)" ); 
+print shellHelpers::shellScript ( r => [], getopts => "(t, task_id),(-r,reload),(-s,suppressdump),(a,action_id),(-A,allowallenvs)" ); 
 :>
 
 eval $(m80 --export)
@@ -40,10 +40,7 @@ fi
 
 . /tmp/$PROGNAME.$internal_id
 
-if [ $command = "eval" ]; then
-    eval $COMMAND
-else
-    printmsg unknown command
-fi
+
+eval $COMMAND
 
 cleanup $?
