@@ -1,0 +1,56 @@
+<: #-*- perl -*-
+
+
+
+# $m80path = [{command => "embedperl" }];
+use Helpers::PerlObject; 
+
+my $po = Helpers::PerlObject->new (name => "DB::PostgresHandle",
+			           isa => 'DB::DBHandle',
+                                   include => [],
+                                   example =>
+q[
+    my $DB::PostgresHandle = $DB::PostgresHandle->new();   # stub example .... expand
+],
+				   description => 'DB::PostgresHandle description; stub description please expand');
+
+$po->setMembers([{name => "schema", 
+		  description => "schema"},
+                 {name => "database", 
+		  description => "database for the db instance to connect to"},
+		 {name => "port", 
+		  format => '\d+',
+		  description => "port for the postgres instance to connect to"},]); 
+
+:>
+<:= $po->dump(); :>
+
+sub _new {
+<:= $po->dumpContract(method => "_new"); :>
+    do {
+	$this->setDatabase($ENV{$this->getNamespace() . "_DATABASE"});
+	$this->setConnectString("dbi:Pg:host=" . $this->getHost() . ";database=" . $this->getDatabase() . ";port=" . $this->getPort() );
+	$this->connect();
+    };
+}
+
+
+sub DBIPrecisionToGenericPrecision {
+   <:= $po->contract('DBIPrecisionToGenericPrecision' => {description => 'SQL Server "Length" doesn\'t conform to the standard used by Oracle or Mysql.  This is the actual storage size.  So we need to convert this to the bounding used by oracle (which is the number of digits to store).  Fun!  DBHandle contains a default method that just returns the passed in length',
+							  getopts => [
+								      {name => 'data' ,
+								       required => 't',
+								       description => 'data to process',},
+								      ]}); :>
+    do {
+	if ($data) {
+	    if ($data < 7) {
+		return "10";
+	    } else {
+		return $data + 3;
+	    }
+	} else {
+	    return "10";
+	}
+    };
+}

@@ -47,7 +47,6 @@ $po->setMembers([{name => "type",
 		  required => 1,
 		  description => "Handle that was used to derive this metadata"},
 		 {name => "precision", 
-		  required => 1,
 		  description => "Name of the document to generate"},]); 
 :>
 <:= $po->dump(); :>

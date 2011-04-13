@@ -7,7 +7,9 @@ my $po = Helpers::PerlObject->new (name => "DB::DBHandleFactory",
 			           isa => '',
                                    include => [DB::DBHandle,
 					       DB::MySQLHandle,
+					       DB::PostgresHandle,
 					       DB::SQLServerHandle,
+					       Data::Dumper,
 					       DB::OracleHandle,],
                                    example =>
 q[
@@ -78,6 +80,12 @@ sub newDBHandle {
 		  $ret = DB::SQLServerHandle->new(namespace => $namespace);
 		  last DBTYPE;
 	      };
+	      $type =~ /postgres/ && do {
+		  debugPrint_s(2,"build postgres db from $namespace");
+		  $ret = DB::PostgresHandle->new(namespace => $namespace);
+		  last DBTYPE;
+	      };
+
 	      
 	      Confess "DB of type $type not implemented";
 	  };
