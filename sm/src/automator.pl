@@ -267,10 +267,6 @@ my $startTime = [gettimeofday];
 
 require "options.pl";
 
-delete $ENV{P4PORT};
-delete $ENV{P4USER};
-delete $ENV{P4PASSWD};
-delete $ENV{P4CLIENT};
 
 # 
 # lock() : used to guarantee only a single copy of this tool runs.

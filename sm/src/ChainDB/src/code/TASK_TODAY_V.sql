@@ -4,9 +4,9 @@
 
 create	or replace view	TASK_TODAY_V AS
 select	task_v.*,
-	'<a href="http://localhost:80/sugar-dev4/taskData/' || task_v.task_id || '/">link</a>' ETL_LOG_FILES,
+	'<a href="http://localhost:80/bond-demo/taskData/' || task_v.task_id || '/">link</a>' ETL_LOG_FILES,
 	decode (tcv.value, null, 'N/A',
-		'<a href="http://localhost:80/sugar-dev4/stage/' || tcv.value || '/' || task_v.task_id || '/">link</a>') RESULTS_DIR,
+		'<a href="http://localhost:80/bond-demo/stage/' || tcv.value || '/' || task_v.task_id || '/">link</a>') RESULTS_DIR,
         '<a href="/stateMachineWeb/contextviewer/begin.do?' || '&&' || '_autoscope__filter=contextViewerControllerGridName~TASK_ID~eq~' || task_v.task_id || '">link</a>' CONTEXT
 from	task_v,
 	(

@@ -976,7 +976,7 @@ sub reap {
 # TODO: If there is only one transition this will not be an array.....
 #
 
-	if ( ! $thistask->{status} =~ /cancel/) { # nah; don't bother
+	unless ( $thistask->{status} =~ /cancel/) { # nah; don't bother
 	    $actionsTaken += &processTransitions(ThisXMLActionHash => $ThisXMLActionHash,
 						 reapObject => $reapObject,
 						 thistask => $thistask);

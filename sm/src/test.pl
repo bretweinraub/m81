@@ -1,47 +1,32 @@
 #!/usr/bin/perl
 
-# use Data::Dumper;
-# use Proc::ProcessTable;
+use File::Basename;
 
-# my $p = new Proc::ProcessTable;
+if (dirname($0) =~ /^\./) {
+    $script_dir=`pwd`;
+    chomp($dir);
+} else {
+    $script_dir = dirname($0);
+}
 
-# $\="\n";
+print $dir;
 
-# print $$;
-# my $thisp;
-# foreach my $proc (@{$p->table}) {
-#     if ($proc->{pid} =~ $$) {
-# 	$thisp = $proc;
-# 	break;
-#     }
-# }
+$args = "";
 
-# print Dumper($thisp);
-# 
-
-sub describe {
-    my %hash = %{$_[0]};
-    
-    my $ret;
-
-    foreach my $key (keys(%hash)) {
-	$ret .= ($ret ? " " : "") . "$key=\"$hash{$key}\"" 
-    }
-    $ret;
+foreach $arg (@ARGV) {
+    $args .= "$arg ";
 }
 
 
 
-my %ret = (
-	   'this' => 'that',
-	   '212' => 'xxxxx',
-	   'numC' => 1,
-	   'z' => [
-		   '1' => '2',
-		   ],
-	   );
+
+print $args;
 
 
-print describe(\%ret);
+$status="cancel";
 
-
+if ( $status !~ /cancel/) {
+    print "match";
+} else {
+    print "no match";
+}
