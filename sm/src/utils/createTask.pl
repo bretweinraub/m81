@@ -31,12 +31,17 @@ use Getopt::Long;
 use dbutil;
 use Data::Dumper;
 use Env;
+use DBI;
+use Env;
+use dbutil;
+
 
 $username="$CONTROLLER_USER";
 $sid="$CONTROLLER_SID";
 $host="$CONTROLLER_HOST";
 $port="$CONTROLLER_PORT";
 $password="$CONTROLLER_PASSWD";
+$dbtype="$CONTROLLER_type";
 
 my $contextAssignment = "=";
 my $contextSeperator = ",";
@@ -70,10 +75,27 @@ $\="\n";
 $debug="true";
 
 
-confess "failed to connect to dbi:Oracle:host=$host;sid=$sid;port=$port" 
-    unless ($dbh = DBI->connect("dbi:Oracle:host=$host;sid=$sid;port=$port", "$username", "$password",
-				{ RaiseError => 1,
-				  AutoCommit => 0 }));
+if ($dbtype =~ /oracle/i) {
+    die "failed to connect to dbi:Oracle:host=$host;sid=$sid;port=$port" 
+	unless ($dbh = DBI->connect("dbi:Oracle:host=$host;sid=$sid;port=$port", "$username", "$password",
+				    { RaiseError => 1,
+				      AutoCommit => 0  }));
+
+} elsif ($dbtype == "Pg") {
+    die "failed to connect to dbi:$dbtype:host=$host;database=$sid;port=$port" 
+	unless ($dbh = DBI->connect("dbi:Pg:host=$host;database=$sid;port=$port", "$username", "$password",
+				    { RaiseError => 1,
+				      AutoCommit => 0  }));
+} else {
+    confess "you haven't set a dbtype in you CONTROLLER_DBTYPE ... and that makes me mad";
+}
+
+
+
+# confess "failed to connect to dbi:Oracle:host=$host;sid=$sid;port=$port" # 
+#     unless ($dbh = DBI->connect("dbi:Oracle:host=$host;sid=$sid;port=$port", "$username", "$password",
+# 				{ RaiseError => 1,
+# 				  AutoCommit => 0 }));
 
 #confess "use -name or -task" if (! $name && ! $task);
 

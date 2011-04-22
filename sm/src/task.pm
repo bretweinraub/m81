@@ -114,7 +114,7 @@ sub setPropertyCallback
 #
 
     if ($prop =~ /actionname/i) {
-	$ref->{db}->runSQL("BEGIN P_TASK.SET_ACTION(task_id => $ref->{task_id}, actionname => '" . scrub ($ref->{actionname}) . "'); END;") ;
+	$ref->{db}->runSQL($ref->{db}->db_specific_construct("set_action",$ref->{actionname},$ref->{task_id}));
 	assert::assert ("\$ref->{task_id} not defined", $ref->{task_id});
 	$ref->{db}->loadSQL("select cur_action_id from task where task_id = $ref->{task_id}", \my %curInfo);
 	assert::assert("failed to derive current action id", $curInfo{rows} == 1);
@@ -418,7 +418,7 @@ sub _getMapper {
 
     my %mappers = ();
 
-    $ChainDB->loadSQL ("select mapper, actionmapper from task_v, ( select task_id from task start with task_id = $task_id connect by prior parent_task_id = task_id ) tlist where task_v.task_id = tlist.task_id order by task_v.task_id", \%mappers);
+    $ChainDB->loadSQL ($ChainDB->db_specific_construct("getMapper",$task_id), \%mappers);
 
     for (my $i = 0 ; $i < $mappers{rows}; $i++) {
 	$ret .= $mappers{MAPPER}[$i] if $mappers{MAPPER}[$i];
@@ -499,7 +499,8 @@ sub buildExportData {
                                                                                 # We will use this to build a complete reference of all
                                                                                 # the applicable <export> statements.
 
-    $ref->{db}->loadSQL ("select task_v.task_id, taskname, actionname from task_v , ( select task_id from task start with task_id = $ref->{task_id} connect by prior parent_task_id = task_id ) tlist where task_v.task_id = tlist.task_id order by task_v.task_id", \%taskHierarchy);
+    
+    $ref->{db}->loadSQL ($ref->{db}->db_specific_construct("buildExportData",$ref->{task_id}), \%taskHierarchy);
 
     for (my $i = 0; $i < $taskHierarchy{rows} ; $i++) {
 	my $task_id = $taskHierarchy{TASK_ID}[$i];
