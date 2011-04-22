@@ -17,14 +17,14 @@ sub slurp
     my $rows = 0;
 
     for (my $i = 0; $i < $max; $i++) {
-	push (@{$DATA->{_fields}},$cursor->{NAME}->[$i]);
-	print $cursor->{NAME}->[$i] . "\t" if $verbose;
+	push (@{$DATA->{_fields}},uc($cursor->{NAME}->[$i]));
+	print uc($cursor->{NAME}->[$i]) . "\t" if $verbose;
     }
     print "\n" if $verbose;
     while (@row = $cursor->fetchrow_array()) {
 	$rows++;
 	for (my $i = 0; $i < $max ; $i++) {
-	    push (@{$DATA->{$cursor->{NAME}->[$i]}},$row[$i]);
+	    push (@{$DATA->{uc($cursor->{NAME}->[$i])}},$row[$i]);
 	    print $row[$i] . "\t" if $verbose;
 	}
 	print "\n" if $verbose;
@@ -43,8 +43,12 @@ sub loadSQL
     $ref = shift;
     local ($sql, $DATA, $verbose) = @_;
 
+    if ($ref->{dbtype} eq "Pg") {
+	$sql =~ s/nvl/coalesce/gi;
+    }
+
     my $t0 = [gettimeofday];
-    $ref->{debug}->debug (2, "$sql")
+    $ref->{debug}->debug (1, "$sql")
 	if $ref->{debug};
     my $stmt = $ref->{dbh}->prepare($sql);
     $stmt->execute or confess "ERROR: $DBI::errstr";
@@ -90,7 +94,17 @@ sub new {
 	my $port = $ref->{expander}->expand(text => $ChainDBxmlElement->{port});
 	my $username = $ref->{expander}->expand(text => $ChainDBxmlElement->{username});
 	my $password = $ref->{expander}->expand(text => $ChainDBxmlElement->{password});
-	$ref->setProperty('dbh', DBI->connect("dbi:Oracle:host=$host;sid=$sid;port=$port", "$username", "$password"));
+	my $dbtype = $ref->{expander}->expand(text => $ChainDBxmlElement->{dbtype});
+
+	$ref->setProperty('dbtype', $dbtype);
+	if ($dbtype eq "Oracle") {
+	    $ref->setProperty('dbh', DBI->connect("dbi:Oracle:host=$host;sid=$sid;port=$port", "$username", "$password"));
+	} elsif ($dbtype eq "Pg") {
+
+	    $ref->setProperty('dbh', DBI->connect("dbi:Pg:host=$host;database=$sid;port=$port", "$username", "$password"));
+	} else {
+	    confess "you haven't set a dbtype in you ChainDB XML block ... and that makes me mad";
+	}
     } else {
 	local $dbh;
 	require "dbConnect.pl";
@@ -101,19 +115,24 @@ sub new {
 # Validate that we have the right DB patchlevel.
 #
 
-    $ref->loadSQL ("select max(patchlevel) pl from m80patchLog where module_name = 'ChainDB'",
-		      \%PL);
 
-    require "requiredPatchlevel.pl";
+#
+#  XXX - this is the old code block where we validated the DB patchlevel
+#
+
+    # $ref->loadSQL ("select max(patchlevel) pl from m80patchLog where module_name = 'ChainDB'",
+    # 		      \%PL);
+
+    # require "requiredPatchlevel.pl";
     
-    confess 'failed to load $requiredPatchlevel from requiredPatchlevel.pl' unless $requiredPatchlevel;
+    # confess 'failed to load $requiredPatchlevel from requiredPatchlevel.pl' unless $requiredPatchlevel;
 
-    $ref->setProperty("ChainDBPatchLevel", $PL{PL}[0]);
+    # $ref->setProperty("ChainDBPatchLevel", $PL{PL}[0]);
 
-    confess 'failed to derive database module ChainDB patchlevel' unless $ref->{ChainDBPatchLevel};
+    # confess 'failed to derive database module ChainDB patchlevel' unless $ref->{ChainDBPatchLevel};
 
-    confess "required ChainDB patchlevel of $ref->{ChainDBPatchLevel}, required $requiredPatchlevel"
-	unless $requiredPatchlevel <= $ref->{ChainDBPatchLevel};
+    # confess "required ChainDB patchlevel of $ref->{ChainDBPatchLevel}, required $requiredPatchlevel"
+    # 	unless $requiredPatchlevel <= $ref->{ChainDBPatchLevel};
     
     return $ref;
 };
@@ -133,8 +152,10 @@ sub fetchDBTasks
 	$dbStatus .= "'$status'";
     }
     
-    my $sqlstring = "select * from task_v where status in ($dbStatus) and nvl(start_by, SYSDATE-1) < SYSDATE";
+    my $sqlstring = "select * from task_v where status in ($dbStatus) and nvl(start_by, " . $ref->db_specific_construct("sysdate") . $ref->db_specific_construct("date_arithmatic","-",1) . ") < " . $ref->db_specific_construct("sysdate") . "";
     $sqlstring .= " and task_group = '$group'" if $group;
+
+    print $sqlstring;
 
     return $ref->loadSQL($sqlstring, \my %tasks);
 }
@@ -146,7 +167,7 @@ sub loadTaskHistory
 
     my $ret = {};
 
-    $ref->loadSQL("select actionname, actionstatus from action where task_id in ( select task_id from task start with task_id = $task_id connect by prior parent_task_id = task_id )",
+    $ref->loadSQL($ref->db_specific_construct("loadTaskHistory",$task_id),
 		  \my %results, $ref->{verbose});
 
     for (my $i = 0 ; $i < $results{rows}; $i++) {
@@ -175,8 +196,8 @@ sub loadTaskContext
 
     my $ret = {};
 
-    $ref->loadSQL(
-		  "select tag, value from task_context where task_id in (select task_id from task start with task_id = $task_id connect by prior parent_task_id = task_id) order by task_id",
+
+    $ref->loadSQL($ref->db_specific_construct("recursive_context",$task_id),
 		  \my %namespace, $ref->{verbose});
 
     for (my $i = 0 ; $i < $namespace{rows}; $i++) {
@@ -297,27 +318,34 @@ sub fetchContextBundle
     my $taskList = $args{taskList};
     my $returnHashRef = $args{returnHashRef};
     my %taskList = %{$taskList};                                                # convert back to a hash from a hashref
+    my $sql = "";                                                                    # builds out the SQL query.
 
-    my $sql;                                                                    # builds out the SQL query.
-
-
+    my $doit = undef;
 
     foreach my $task_id (keys (%taskList)) {
 	next if ($taskList{$task_id}->getProperty("status") =~ /queued/ and
 		 $taskList{$task_id}->getProperty("task_context"));
-	unless ($sql) {
-	    $sql .= "select root_id, task_id, tag, value from (";
-	} else {
-	    $sql .= " union all ";
+
+
+	$doit=true;
+	if ($sql) {
+	    $sql .= " union ";
 	}
 
-	$sql .= "select $task_id root_id, task_id , tag, value from  task_context where task_id in (select task_id from task start with task_id = $task_id connect by prior parent_task_id = task_id)";
+	$sql .= "select root_id, task_id, tag, value from (";
+
+	$sql .= $ref->db_specific_construct("fetchContextBundle",$task_id); 
+	
+	$sql .= ") AS sql"
 
     }
 
-    $sql .= ") order by task_id" if $sql;
+    $_sql = $sql;
+    $sql = "select root_id, task_id, tag, value from ($_sql) AS IV order by task_id";
 
-    $ref->loadSQL($sql,$returnHashRef) if $sql;
+#    confess "$sql";
+
+    $ref->loadSQL($sql,$returnHashRef) if $doit;
 }    
 
 ################################################################################################################################################################
@@ -341,5 +369,73 @@ sub LoadContextFromBundle
 
     return $ret;
 }
+
+sub db_specific_construct
+{
+    my $ref = shift;
+    my $construct = shift;
+
+    my $ret;
+
+    if ($ref->{dbtype} eq "Oracle") {
+	if ($construct eq "sysdate") {
+	    $ret = "sysdate";
+	} elsif ($construct eq "date_arithmatic") {
+	    $op = shift;
+	    $val = shift;
+	    $ret = "$op $val";
+	} elsif ($construct eq "recursive_context") {
+	    $ret = "select tag, value from task_context where task_id in (select task_id from task start with task_id = $task_id connect by prior parent_task_id = task_id) order by task_id";
+	} elsif ($construct eq "set_action") {
+	    $actionname = shift;
+	    $task_id = shift;
+	    $ret = "BEGIN P_TASK.SET_ACTION(task_id => $task_id, actionname => '$actionname'); END;";
+	} elsif ($construct eq "loadTaskHistory") {
+	    $task_id = shift;
+	    $ret="select actionname, actionstatus from action where task_id in ( select task_id from task start with task_id = $task_id connect by prior parent_task_id = task_id )";
+	} elsif ($construct eq "fetchContextBundle") {
+	    $task_id = shift;
+	    $ret = "select $task_id root_id, task_id , tag, value from  task_context where task_id in (select task_id from task start with task_id = $task_id connect by prior parent_task_id = task_id)";
+	}
+
+    } elsif ($ref->{dbtype} eq "Pg") {
+	if ($construct eq "sysdate") {
+	    $ret = "now()";
+	} elsif ($construct eq "date_arithmatic") {
+	    $op = shift;
+	    $val = shift;
+	    $ret = "$op interval '$val day'";
+	} elsif ($construct eq "recursive_context") {
+	    $task_id = shift;
+	    $ret = $ref->task_hierarchical_query($task_id,"select tag, value from child_tasks, task_context where child_tasks.task_id = task_context.task_id order by child_tasks.task_id ");
+	} elsif ($construct eq "set_action") {
+	    $actionname = shift;
+	    $task_id = shift;
+	    $ret = "select set_action($task_id,'$actionname');";
+	} elsif ($construct eq "loadTaskHistory") {
+	    $task_id = shift;
+	    $ret = $ref->task_hierarchical_query($task_id,"select action.task_id,  action_id,  actionname,actionstatus from  child_tasks,  action where  child_tasks.task_id = action.task_id");
+	} elsif ($construct eq "fetchContextBundle") {
+	    $task_id = shift;
+	    $ret = $ref->task_hierarchical_query($task_id,"select $task_id root_id, child_tasks.task_id, tag, value from task_context, child_tasks where task_context.task_id = child_tasks.task_id");
+	}
+
+    } else {
+	confess "Huh!? ... shouldn't be here";
+    }
+    return $ret;
+}
+
+
+sub task_hierarchical_query
+{
+    my $ref = shift;
+
+    my $task_id = shift;
+    my $append = shift;
+
+    return "WITH RECURSIVE child_tasks as ( select task.task_id, task.parent_task_id from task where task_id = $task_id UNION select task.task_id, task.parent_task_id from task, child_tasks where task.task_id = child_tasks.parent_task_id ) $append";
+}
+
 
 1;

@@ -115,7 +115,7 @@ sub setPropertyCallback
 #
 
     if ($prop =~ /actionname/i) {
-	$ref->{db}->runSQL("BEGIN P_TASK.SET_ACTION(task_id => $ref->{task_id}, actionname => '" . scrub ($ref->{actionname}) . "'); END;") ;
+	$ref->{db}->runSQL($ref->{db}->db_specific_construct("set_action",$ref->{actionname},$ref->{task_id}));
 	assert::assert ("\$ref->{task_id} not defined", $ref->{task_id});
 	$ref->{db}->loadSQL("select cur_action_id from task where task_id = $ref->{task_id}", \my %curInfo);
 	assert::assert("failed to derive current action id", $curInfo{rows} == 1);
