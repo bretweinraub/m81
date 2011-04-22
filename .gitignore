@@ -1,0 +1,8 @@
+*~
+*.out
+*patch???
+*.log
+*/modules/*
+aurchestrator.pl.aura-di*
+aurchestrator.pl.insight-admin-console*
+/bin/*.sh
