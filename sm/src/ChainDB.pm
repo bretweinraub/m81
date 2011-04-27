@@ -154,7 +154,7 @@ sub new {
 	my $dbtype = $ref->{expander}->expand(text => $ChainDBxmlElement->{dbtype});
 
 	$ref->setProperty('dbtype', $dbtype);
-	if ($dbtype eq "Oracle") {
+	if ($dbtype eq "oracle") {
 	    $ref->setProperty('dbh', DBI->connect("dbi:Oracle:host=$host;sid=$sid;port=$port", "$username", "$password"));
 	} elsif ($dbtype eq "Pg") {
 
@@ -165,6 +165,7 @@ sub new {
     } else {
 	local $dbh;
 	require "dbConnect.pl";
+	$ref->setProperty('dbtype',"$CONTROLLER_type");
 	$ref->setProperty('dbh', $dbh);
     }
 
@@ -434,7 +435,7 @@ sub db_specific_construct
 
     my $ret;
 
-    if ($ref->{dbtype} eq "Oracle") {
+    if ($ref->{dbtype} eq "oracle") {
 	if ($construct eq "sysdate") {
 	    $ret = "sysdate";
 	} elsif ($construct eq "date_arithmatic") {

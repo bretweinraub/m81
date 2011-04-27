@@ -18,6 +18,8 @@ $po->setMembers([{name => "schema",
 		  description => "schema"},
                  {name => "database", 
 		  description => "database for the db instance to connect to"},
+                 {name => "sid", 
+		  description => "? - maybe its here"},
 		 {name => "port", 
 		  format => '\d+',
 		  description => "port for the postgres instance to connect to"},]); 
@@ -30,6 +32,7 @@ sub _new {
     do {
 	$this->setDatabase($ENV{$this->getNamespace() . "_DATABASE"});
 	$this->setConnectString("dbi:Pg:host=" . $this->getHost() . ";database=" . $this->getDatabase() . ";port=" . $this->getPort() );
+	print $this->getConnectString();
 	$this->connect();
     };
 }

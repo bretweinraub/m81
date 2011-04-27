@@ -52,7 +52,7 @@ DB::PostgresHandle extends class DB::DBHandle ; refer to the documentation for t
 
 =cut
 
-use fields qw( schema database port debug );
+use fields qw( schema database sid port debug );
 
 =pod
 
@@ -88,6 +88,12 @@ $_allMemberAttributes{database} = {
         }
 ;
 $_allSetters{database} = \&setDatabase;
+$_allMemberAttributes{sid} = {
+          'name' => 'sid',
+          'description' => '? - maybe its here'
+        }
+;
+$_allSetters{sid} = \&setSid;
 $_allMemberAttributes{port} = {
           'format' => '\\d+',
           'name' => 'port',
@@ -303,6 +309,58 @@ setter for member database
 
     $this->{database} = $database;
     return $database;
+}
+
+
+
+=pod
+
+=head2 sid => "any string"
+
+? - maybe its here
+
+=cut
+
+sub getSid {
+
+=pod
+
+=head3 $PostgresHandle->getSid ()
+
+
+getter for member sid
+
+=cut
+
+    my $this = shift;
+
+
+
+
+
+    return $this->{sid};
+}
+sub setSid {
+
+=pod
+
+=head3 $PostgresHandle->setSid (sid => "any string")
+
+ - sid ("any string")		 : ? - maybe its here
+
+setter for member sid
+
+=cut
+
+    my $this = shift;
+
+
+    my $sid = shift;
+
+
+
+    $this->{sid} = $sid;
+    return $sid;
 }
 
 
@@ -532,6 +590,7 @@ callback constructor, do not call directly use new() instead
     do {
 	$this->setDatabase($ENV{$this->getNamespace() . "_DATABASE"});
 	$this->setConnectString("dbi:Pg:host=" . $this->getHost() . ";database=" . $this->getDatabase() . ";port=" . $this->getPort() );
+	print $this->getConnectString();
 	$this->connect();
     };
 }

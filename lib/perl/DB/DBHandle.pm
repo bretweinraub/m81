@@ -810,6 +810,7 @@ initializes database connection
 	my $dbh;
 
 
+	print $this->getConnectString();
 	Confess "failed to connect to DBI"
 	    unless ($dbh = DBI->connect($this->getConnectString(),, $this->getUser() , $this->getPassword(),
 					{ RaiseError => 1 }));

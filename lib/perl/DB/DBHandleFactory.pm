@@ -383,12 +383,16 @@ Generate a new DBHandle based on metadata available.
     do {
 	# get clever and figure out the correct Object Handle to instantiate.
 	my $ret;
+	unless ($namespace) {
+	    debugPrint_s(1, "no namespace specified; guessing CONTROLLER");
+	    $namespace = "CONTROLLER";
+	}
 	if ($namespace) {
 	    debugPrint_s(1,"searching for db info of $namespace");
 	    my $type = $ENV{$namespace . "_type"};
 	    Confess "database type not derivable from metadata.  Does an object by the name of $namespace exist?  Is it a Database object?"
 		unless $type;
-	    debugPrint_s(2,"derived db type as $type");
+	    print "derived db type as $type";
 	  DBTYPE: {
 	      $type =~ /mysql/ && do {
 		  debugPrint_s(2,"build mysql db from $namespace");
@@ -405,7 +409,7 @@ Generate a new DBHandle based on metadata available.
 		  $ret = DB::SQLServerHandle->new(namespace => $namespace);
 		  last DBTYPE;
 	      };
-	      $type =~ /postgres/ && do {
+	      ($type =~ /postgres/ or $type =~ /Pg/) && do {
 		  debugPrint_s(2,"build postgres db from $namespace");
 		  $ret = DB::PostgresHandle->new(namespace => $namespace);
 		  last DBTYPE;
