@@ -65,7 +65,7 @@ will mean additional log messages will be generated when mapping variables that 
 		{tag => "dumpxml",
 		 description => 'dump full expanded configuration file and exit',},
 		{tag => "printIdentityPath",
-		 description => 'prints out the server identity file and exists',},
+		 description => 'prints out the server identity file and exits',},
 		{tag => "group:s",
 		 description => 'set the group for this server.  Can be used to run multiple servers on the same schema',},
 		{tag => "expansionStyle",
@@ -221,7 +221,7 @@ $smtpServer ||= "localhost";
 
 my $identityFileBaseName = "$lockdir/" . basename($0) . ".$ENV{M80_BDF}." . basename($configFile); 
 
-if ($printIndentyPath) {
+if ($printIdentityPath) {
     print "$identityFileBaseName\n";
     exit 0;
 }
@@ -238,7 +238,7 @@ system ("rm -f $runningFile");
 # 			echo => $echo,
 # 			logName => "StateExec");
 
-my $debug = CkuruServer::Debug->new (level => ($DebugLevel) ? $DebugLevel : 0, 
+my $debug = CkuruServer::Debug->new (level => ($DebugLevel ? $DebugLevel : 0), 
 				     logDir => $logDir, 
 				     echo => $echo,
 				     logName => "CkuruServer");
@@ -347,6 +347,10 @@ sub setParallelKey
     my $increment = $args{increment};                                           # load increment data from the argument list
     my $task_id = $args{task_id};                                               # load task_id data from the argument list
 
+    my ($caller) = (caller(1))[3];
+    my ($line) = (caller(1))[2];
+    $caller = "[$caller:$line]" if $caller;
+
     my $cur = $running{$type}{$parallelKey}{$name};                             # cache current information
 
     my ($package, $filename, $line, $subroutine, $hasargs,
@@ -358,7 +362,7 @@ sub setParallelKey
 	$running{$type}{$parallelKey}{$name} = $increment;
     }
     
-    debug(1, "$subroutine($task_id): running $type" . "s of type $name:$parallelKey is " . $running{$type}{$parallelKey}{$name} . ", old value was $cur" , $task_id);    
+    debug(1, "$subroutine($task_id): running $type" . "s of type $name:$parallelKey is " . $running{$type}{$parallelKey}{$name} . ", old value was $cur; called from ($caller)" , $task_id);    
 
     confess "logic error parallel key set to < 0" 
 	if $running{$type}{$parallelKey}{$name} < 0;
@@ -751,12 +755,15 @@ sub buildRunList {
 	    }
 	}
 
-	if ($allTasks{STATUS}[$i] =~ /cancel/) {
+	#
+	# This seems bogus:
 
-	    my $task_id = $allTasks{TASK_ID}[$i];
+	# if ($allTasks{STATUS}[$i] =~ /cancel/) {
 
-	    doCancel ($task_id);
-	}
+	#     my $task_id = $allTasks{TASK_ID}[$i];
+
+	#     doCancel ($task_id);
+	# }
     }
 
     debug(2, "leaving buildRunList", $task_id);
@@ -824,6 +831,8 @@ sub processTransitions
 	    }
 
 	}
+
+	$debug->debug (2, "fallthru is $fallthru");
 
 	if (! $fallthru) {
 	    $debug->debug (2, "($fallthru) matched scoped transition $derivedValue =~ " . $scopeValue, $task_id);
@@ -911,6 +920,7 @@ sub reap {
     my $actionsTaken = 0;
 
     while ($reapObject = pop (@reapList)) {
+	$actionsTaken += 1;
 	my $pid = $reapObject->{pid};
 	$debug->debug (PID, "pid that exited is $pid");
 	unless ($pidMap{$pid}) {
@@ -928,6 +938,8 @@ sub reap {
 	my $actionname=autoUtil::removeSingleQuotes($thistask->getProperty(actionname));
 	my $taskname=autoUtil::removeSingleQuotes($thistask->getProperty(taskname));
 
+	next if (task::fetchStatus (db => $db, task_id => $task_id) eq "canceled");
+
 	$debug->debug (1, "reap: reaping $reapObject->{pid}, error code $reapObject->{exit_value}, signal $reapObject->{signal_num}", $task_id);
 	$debug->debug (1, "pid $reapObject->{pid} seems associated with task " . $thistask->getProperty(task_id) . ", action $actionname", $task_id);
 
@@ -936,6 +948,8 @@ sub reap {
 	print Dumper($ThisXMLActionHash) if ($debug->getProperty(level)) >= 4 ;
 
 # TODO: need to update this for parallelismKey
+
+#	if ($activeList{$task_id}) {
 	my $actionParallelKey = $thistask->getProperty(actionParallelKey);
 	my $taskParallelKey = $thistask->getProperty(taskParallelKey);
 
@@ -950,6 +964,7 @@ sub reap {
 			 parallelKey => $actionParallelKey,
 			 name => $actionname,
 			 increment => -1 );
+#	}
 
 
 # 	debug(PID,"reap(): running actions of type $actionname:$actionParallelKey is " . --$running{action}{$actionParallelKey}{$actionname}, $task_id)
@@ -979,10 +994,12 @@ sub reap {
 # TODO: If there is only one transition this will not be an array.....
 #
 
-	unless ( $thistask->{status} =~ /cancel/) { # nah; don't bother
-	    $actionsTaken += &processTransitions(ThisXMLActionHash => $ThisXMLActionHash,
-						 reapObject => $reapObject,
-						 thistask => $thistask);
+	if ( $thistask->{status} =~ /cancel/) { # nah; don't bother
+	    $debug->debug (1, "skipping process transitions because task is already canceled", $task_id);
+	} else {
+	    &processTransitions(ThisXMLActionHash => $ThisXMLActionHash,
+				reapObject => $reapObject,
+				thistask => $thistask);
 	}
 					     
     }
@@ -1521,7 +1538,7 @@ sub doCancel {
 # force the code that does this (in execute) manage this.
 #
 
-    my ($task_id, $doDecrement) = @_;                                           # doDecrement means adjust parallel keys
+    my ($task_id, $doDecrement) = @_;                       # doDecrement means adjust parallel keys
                                                                                 # this mains we were "waiting"
     my $thistask = task::new (debug => $debug,
 			      db => $db,
@@ -1562,14 +1579,14 @@ sub cancelRunningTask {
     my $task_id = shift;
     $debug->debug (1, "cancelRunningTask called for task_id $task_id",$task_id);
     my %tasksToKill;
-    $db->loadSQL("select task_id, status, actionpid from task_v start with task_id = $task_id connect by prior task_id = parent_task_id",\%tasksToKill);
+    $db->loadSQL($db->db_specific_construct("cancelRunningTask",$task_id),\%tasksToKill);
     for (my $i = 0 ; $i < $tasksToKill{rows} ; $i++) {
 	my $task_id = $tasksToKill{TASK_ID}[$i];
 	my $status = $tasksToKill{STATUS}[$i];
 	my $actionpid = $tasksToKill{ACTIONPID}[$i];
 
 	if ($status =~ /running/) {
-	    doCancel($task_id);
+	    doCancel($task_id, 1);
 	    _cancelrunningtask($task_id,$actionpid) 
 	} elsif ($status =~ /waiting/) {
 	    doCancel($task_id, 1);
@@ -1627,11 +1644,12 @@ sub validateInternalState
 	foreach my $type (keys (%running)) {
 	    foreach my $key (keys (%{$running{$type}})) {
 		foreach my $name (keys (%{$running{$type}{$key}})) {
-		    $debug->debug (1, "(parallel) $type.$key.$name : " . $running{$type}{$key}{$name})
+		    $debug->debug (1, "(parallel) illegal! $type.$key.$name : " . $running{$type}{$key}{$name})
 			if $running{$type}{$key}{$name} > 0;
 		}
 	    }
 	}
+	_activeList;
 	confess "illegal key value detected ... check the state machine logs";
     }
 }
@@ -1665,7 +1683,7 @@ foreach $arg (@SAVE_ARGS) {
 eval {
     $db->runSQL("
 insert into script_info(
-" . ( ($ChainDB->{dbtype} eq "Oracle") ? "id," : "") . "
+" . ( ($db->{dbtype} eq "oracle") ? "id," : "") . "
 name,
 pid,
 full_path,
@@ -1675,7 +1693,7 @@ process_group,
 created_at
 ) 
 values (
-" . ( ($ChainDB->{dbtype} eq "Oracle") ? "SCRIPT_INFO_SEQ.nextVal," : "") . "
+" . ( ($db->{dbtype} eq "oracle") ? "SCRIPT_INFO_SEQ.nextVal," : "") . "
 '" . basename($0) . "',
 $$,
 '" . $script_dir . "',
@@ -1733,7 +1751,8 @@ while (! $stop) {
     if ($actionsTaken > 0 or defined $skipSleep) {
 	$SleepTimer->reset();
     } else {
-	$SleepTimer->sleep();
+	$secs= $SleepTimer->sleep();
+	$debug->debug(1, "slept $secs seconds");
     }
 
     undef $skipSleep;

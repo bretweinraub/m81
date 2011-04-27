@@ -105,10 +105,13 @@ sub loadSQL
     }
 
     my $t0 = [gettimeofday];
-    $ref->{debug}->debug (1, "$sql")
-	if $ref->{debug};
-    my $stmt = $ref->{dbh}->prepare($sql);
-    $stmt->execute or confess "ERROR: $DBI::errstr";
+    my $stmt = $ref->{dbh}->prepare($sql) or confess "ERROR: $DBI::errstr";
+#    $stmt->execute or confess "ERROR: $DBI::errstr";
+
+    $stmt->execute
+	or confess "ERROR: Can't execute SQL statement: $DBI::errstr\n";
+
+
     my $t1 = [gettimeofday];
 
     $ref->{debug}->debug (1, "$sql : " . TV_INTERVAL($t0,$t1) ) if $ref->{debug};
@@ -213,8 +216,6 @@ sub fetchDBTasks
     my $sqlstring = "select * from task_v where status in ($dbStatus) and nvl(start_by, " . $ref->db_specific_construct("sysdate") . $ref->db_specific_construct("date_arithmatic","-",1) . ") < " . $ref->db_specific_construct("sysdate") . "";
     $sqlstring .= " and task_group = '$group'" if $group;
 
-    print $sqlstring;
-
     return $ref->loadSQL($sqlstring, \my %tasks);
 }
 
@@ -311,26 +312,7 @@ sub fetchContextSimple {
     $ref = shift;
     my ($tag,$task_id) = @_;
 
-    $ref->loadSQL("
-select	*
-from	(
-		select	tag,
-			value
-		from	task_context
-		where	task_id in
-			(
-				select		task_id
-				from 		task 
-				start with 	task_id = $task_id
-				connect by 	prior parent_task_id = task_id
-			)
-		and	tag = '$tag'
-		order	by
-			task_id desc
-	)
-where	ROWNUM = 1",
-		  \my %context);
-
+    $ref->loadSQL($ref->db_specific_construct("fetchContextSimple", $task_id, $tag), \my %context);
     return $context{VALUE}[0];
 }
 
@@ -394,12 +376,12 @@ sub fetchContextBundle
 
 	$sql .= $ref->db_specific_construct("fetchContextBundle",$task_id); 
 	
-	$sql .= ") AS sql"
+	$sql .= ") " . $ref->db_specific_construct("nameInlineView") . " sql";
 
     }
 
     $_sql = $sql;
-    $sql = "select root_id, task_id, tag, value from ($_sql) AS IV order by task_id";
+    $sql = "select root_id, task_id, tag, value from ($_sql) " . $ref->db_specific_construct("nameInlineView") . " IV order by task_id";
 
 #    confess "$sql";
 
@@ -443,11 +425,12 @@ sub db_specific_construct
 	    $val = shift;
 	    $ret = "$op $val";
 	} elsif ($construct eq "recursive_context") {
+	    $task_id = shift;
 	    $ret = "select tag, value from task_context where task_id in (select task_id from task start with task_id = $task_id connect by prior parent_task_id = task_id) order by task_id";
 	} elsif ($construct eq "set_action") {
 	    $actionname = shift;
 	    $task_id = shift;
-	    $ret = "BEGIN P_TASK.SET_ACTION(task_id => $task_id, actionname => '$actionname'); END;";
+	    $ret = "BEGIN P_TASK.SET_ACTION(task_id => $task_id, actionname => '" . autoUtil::removeSingleQuotes($actionname) . "'); END;";
 	} elsif ($construct eq "loadTaskHistory") {
 	    $task_id = shift;
 	    $ret="select actionname, actionstatus from action where task_id in ( select task_id from task start with task_id = $task_id connect by prior parent_task_id = task_id )";
@@ -460,7 +443,35 @@ sub db_specific_construct
 	} elsif ($construct eq "buildExportData") {
 	    $task_id = shift;
 	    $ret = "select task_v.task_id, taskname, actionname from task_v , ( select task_id from task start with task_id = $task_id connect by prior parent_task_id = task_id ) tlist where task_v.task_id = tlist.task_id order by task_v.task_id";
+	} elsif ($construct eq "cancelRunningTask") {
+	    $task_id = shift;
+	    $ret = "select task_id, status, actionpid from task_v start with task_id = $task_id connect by prior task_id = parent_task_id";
+	} elsif ($construct eq "nameInlineView") {
+	    $ret = "";
+	} elsif ($construct eq "fetchContextSimple") {
+	    $task_id = shift;
+	    $tag = shift;
+	    $ret = "
+select	*
+from	(
+		select	tag,
+			value
+		from	task_context
+		where	task_id in
+			(
+				select		task_id
+				from 		task 
+				start with 	task_id = $task_id
+				connect by 	prior parent_task_id = task_id
+			)
+		and	tag = '$tag'
+		order	by
+			task_id desc
+	)
+where	ROWNUM = 1";
 	}
+
+
 
     } elsif ($ref->{dbtype} eq "Pg") {
 	if ($construct eq "sysdate") {
@@ -492,14 +503,25 @@ sub db_specific_construct
 	} elsif ($construct eq "buildExportData") {
 	    $task_id = shift;
 	    $ret = $ref->task_hierarchical_query($task_id, "select task_v.task_id, taskname, actionname from task_v , child_tasks where task_v.task_id = child_tasks.task_id order by task_v.task_id");
+	} elsif ($construct eq "cancelRunningTask") {
+	    $task_id = shift;
+	    $ret = $ref->reverse_task_hierarchical_query($task_id, "select task_v.task_id, status, task_v.actionpid from task_v, child_tasks where task_v.task_id = child_tasks.task_id");
+	} elsif ($construct eq "nameInlineView") {
+	    $ret = "AS";
+	} elsif ($construct eq "fetchContextSimple") {
+	    $task_id = shift;
+	    $tag = shift;
+	    $ref->task_hierarchical_query($task_id, "select * from child_tasks, task_context where child_tasks.task_id = task_context.task_id and tag = '$tag' order by child_tasks.task_id desc limit 1");
 	}
-
     } else {
-	confess "Huh!? ... shouldn't be here";
+	confess "Huh!? ... shouldn't be here : " . $ref->{dbtype};
     }
     return $ret;
 }
 
+#
+##  This scans "up" the tree from the bottom node.
+# 
 
 sub task_hierarchical_query
 {
@@ -510,5 +532,19 @@ sub task_hierarchical_query
 
     return "WITH RECURSIVE child_tasks as ( select task.task_id, task.parent_task_id from task where task_id = $task_id UNION select task.task_id, task.parent_task_id from task, child_tasks where task.task_id = child_tasks.parent_task_id ) $append";
 }
+
+#
+##  This scans "down" the tree from the top node.
+# 
+sub reverse_task_hierarchical_query
+{
+    my $ref = shift;
+
+    my $task_id = shift;
+    my $append = shift;
+
+    return "WITH RECURSIVE child_tasks as ( select task.task_id, task.parent_task_id from task where task_id = $task_id UNION select task.task_id, task.parent_task_id from task, child_tasks where task.parent_task_id = child_tasks.task_id ) $append";
+}
+
 
 1;

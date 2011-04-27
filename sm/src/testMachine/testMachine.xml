@@ -4,11 +4,12 @@
 	   wwwroot="/var/www/html/$(env.M80_BDF)/taskData"
 	   urlbase="/$(env.M80_BDF)/taskData">
 
-  <ChainDB username="$(env.AutomationServerUser)" 
-	   password="$(env.AutomationServerPasswd)" 
-	   port="$(env.AutomationServerPort)"
-	   host="$(env.AutomationServerHost)"
-	   sid="$(env.AutomationServerSID)"/>
+  <ChainDB username="$(env.CONTROLLER_USER)" 
+	   password="$(env.CONTROLLER_PASSWD)" 
+	   port="$(env.CONTROLLER_PORT)"
+	   host="$(env.CONTROLLER_HOST)"
+	   dbtype="$(env.CONTROLLER_type)"
+	   sid="$(env.CONTROLLER_SID)"/>
 
     <tasks>
 

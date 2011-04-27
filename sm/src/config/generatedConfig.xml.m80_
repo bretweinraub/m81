@@ -10,6 +10,7 @@
 	   password="$(env.CONTROLLER_PASSWD)" 
 	   port="$(env.CONTROLLER_PORT)"
 	   host="$(env.CONTROLLER_HOST)"
+	   dbtype="$(env.CONTROLLER_type)"
 	   sid="$(env.CONTROLLER_SID)"/>
 
 <@

@@ -249,7 +249,6 @@ sub transitionTo
     my $ref = shift;
     my ($destination, $actionmapper, $callback, $pop);
 
-
     my $task_id = $ref->{task_id};
 
     if ($_[0] =~ /^(nextaction|actionmapper|callback|pop)$/) {
