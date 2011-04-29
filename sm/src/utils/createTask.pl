@@ -33,15 +33,11 @@ use Data::Dumper;
 use Env;
 use DBI;
 use Env;
-use dbutil;
+use ChainDB;
 
+my $ChainDB = ChainDB::new (verbose => $debug);
 
-$username="$CONTROLLER_USER";
-$sid="$CONTROLLER_SID";
-$host="$CONTROLLER_HOST";
-$port="$CONTROLLER_PORT";
-$password="$CONTROLLER_PASSWD";
-$dbtype="$CONTROLLER_type";
+$ChainDB->{dbh}->{'AutoCommit'} = 0;
 
 my $contextAssignment = "=";
 my $contextSeperator = ",";
@@ -74,60 +70,29 @@ GetOptions("task:s" => \$task,
 $\="\n";
 $debug="true";
 
-
-if ($dbtype =~ /oracle/i) {
-    die "failed to connect to dbi:Oracle:host=$host;sid=$sid;port=$port" 
-	unless ($dbh = DBI->connect("dbi:Oracle:host=$host;sid=$sid;port=$port", "$username", "$password",
-				    { RaiseError => 1,
-				      AutoCommit => 0  }));
-
-} elsif ($dbtype == "Pg") {
-    die "failed to connect to dbi:$dbtype:host=$host;database=$sid;port=$port" 
-	unless ($dbh = DBI->connect("dbi:Pg:host=$host;database=$sid;port=$port", "$username", "$password",
-				    { RaiseError => 1,
-				      AutoCommit => 0  }));
-} else {
-    confess "you haven't set a dbtype in you CONTROLLER_DBTYPE ... and that makes me mad";
-}
-
-
-
-# confess "failed to connect to dbi:Oracle:host=$host;sid=$sid;port=$port" # 
-#     unless ($dbh = DBI->connect("dbi:Oracle:host=$host;sid=$sid;port=$port", "$username", "$password",
-# 				{ RaiseError => 1,
-# 				  AutoCommit => 0 }));
-
-#confess "use -name or -task" if (! $name && ! $task);
-
 confess "use or -task" if (! $task);
 
-# if ($name) { 
-#     dbutil::runSQL ($dbh, "insert into task (task_name, taskname, status) values ('$name', '$task', '$status')", $debug);
-#     dbutil::loadSQL ($dbh, "select task_id from task where taskname = '$task' and task_name = '$name'", \%task, $debug);
-# } else { 
-    $date=`date +%Y%m%d%H%M%S.%N`;
+$date=`date +%Y%m%d%H%M%S.%N`;
 
-    dbutil::runSQL 
-	($dbh, 
+$ChainDB->runSQL(
 	 "insert into task (task_name, taskname, status, parent_task_id, mapper) values ('$date', '$task', '$status', $parent," . 
 	 ($mapper ? "'$mapper')" : "NULL)"),
 	 $debug);
 
-    dbutil::loadSQL ($dbh, "select task_id from task where taskname = '$task' and task_name = '$date'", \%task, $debug);
-#}
+$ChainDB->loadSQL("select task_id from task where taskname = '$task' and task_name = '$date'", \%task, $debug);
 
 $task_id = $task{TASK_ID}[0];
 print STDERR "contextSeperator is $contextSeperator";
 @contexts = split(/$contextSeperator/,$context);
 foreach (@contexts) {
     ($tag, $value) = split(/$contextAssignment/, $_, 2);
-    dbutil::runSQL ($dbh, "insert into task_context (tag, value, task_id) values ('$tag', '$value', $task_id)", $debug);
+    $ChainDB->runSQL ("insert into task_context (tag, value, task_id) values ('$tag', '$value', $task_id)", $debug);
 }    
 
 print "$task_id";
 
 for my $this (@this) {
-    dbutil::runSQL ($dbh, "insert into task_context (tag, value, task_id) values ('$this', '$task_id', $task_id)", $debug) if $this;
+    $ChainDB->runSQL ("insert into task_context (tag, value, task_id) values ('$this', '$task_id', $task_id)", $debug) if $this;
 }
 
 # allow for extension
@@ -137,14 +102,12 @@ for my $ext (@extensions) {
     $func = $lib unless $func; # entry point is the same as file unless defined
     $lib .= '.pl' unless $lib =~ /\.pl$/;
     require "$lib";
-    &{ $func }(dbh => $dbh,
+    &{ $func }(dbh => $ChainDB->{dbh},
 	       task_id => $task_id);
 }
 
-$dbh->commit();
+$ChainDB->{dbh}->commit();
 
-
-$loadSQL = \&dbutil::loadSQL;
 
 if ($poll) {
     $\="";
@@ -157,7 +120,7 @@ if ($poll) {
 
     do {
 	%actions = ();
-	&{$loadSQL} ($dbh, "select 	action.task_id, 
+	$ChainDB->loadSQL ("select 	action.task_id, 
 				action_id, 
 				actionname, 
 				actionstatus,

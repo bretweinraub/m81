@@ -3,13 +3,14 @@
 
 
 <ChainGang name="$(env.M80_BDF)" 
-	   wwwroot="/var/www/html/$(env.M80_BDF)/taskData"
+	   wwwroot="/var/www/$(env.M80_BDF)/taskData"
 	   urlbase="/$(env.M80_BDF)/taskData">
 
   <ChainDB username="$(env.CONTROLLER_USER)" 
 	   password="$(env.CONTROLLER_PASSWD)" 
 	   port="$(env.CONTROLLER_PORT)"
 	   host="$(env.CONTROLLER_HOST)"
+	   dbtype="$(env.CONTROLLER_type)"
 	   sid="$(env.CONTROLLER_SID)"/>
 
   <exports>

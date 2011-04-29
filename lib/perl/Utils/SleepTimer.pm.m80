@@ -98,8 +98,8 @@ sub sleep {
 						   ]}); :>
     do {
 	my $sleepTimer = $this->getSleepVal();
-	$this->debugPrint (1, "sleeping $sleepTimer seconds");
 	sleep($sleepTimer);
+	return $sleepTimer;
     };
 }
 

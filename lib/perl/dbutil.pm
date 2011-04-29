@@ -12,14 +12,14 @@ sub slurp
     
     $DATA->{rows} = 0;
     for (my $i = 0; $i < $cursor->{NUM_OF_FIELDS}; $i++) {
-	push (@{$DATA->{_fields}},$cursor->{NAME}->[$i]);
-	print STDERR $cursor->{NAME}->[$i] . "\t" if $verbose;
+	push (@{$DATA->{_fields}},uc($cursor->{NAME}->[$i]));
+	print STDERR uc($cursor->{NAME}->[$i]) . "\t" if $verbose;
     }
     print STDERR  "\n" if $verbose;
     while (@row = $cursor->fetchrow_array()) {
 	$DATA->{rows}++;
 	for (my $i = 0; $i < $cursor->{NUM_OF_FIELDS} ; $i++) {
-	    push (@{$DATA->{$cursor->{NAME}->[$i]}},$row[$i]);
+	    push (@{$DATA->{uc($cursor->{NAME}->[$i])}},$row[$i]);
 	    print STDERR  $row[$i] . "\t" if $verbose;
 	}
 	print STDERR  "\n" if $verbose;
@@ -27,11 +27,16 @@ sub slurp
     $cursor->finish;
 }
 
+
+
 sub loadSQL
 {
     my ($dbh, $sql, $DATA, $verbose) = @_;
     
-    my $stmt = $dbh->prepare($sql);
+    eval {
+	my $stmt = $dbh->prepare($sql);
+    };
+    confess "$@" if $@;
     print STDERR ($sql . "\n") if $verbose;
     $stmt->execute
 	or confess "ERROR: $DBI::errstr";

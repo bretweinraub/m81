@@ -108,9 +108,11 @@ sub loadSQL
     my $stmt = $ref->{dbh}->prepare($sql) or confess "ERROR: $DBI::errstr";
 #    $stmt->execute or confess "ERROR: $DBI::errstr";
 
-    $stmt->execute
-	or confess "ERROR: Can't execute SQL statement: $DBI::errstr\n";
-
+    eval {
+	$stmt->execute
+	    or confess "ERROR: Can't execute SQL statement: $DBI::errstr\n";
+    };
+    confess "$@" if $@;
 
     my $t1 = [gettimeofday];
 
@@ -127,7 +129,7 @@ sub runSQL
 
     my $t0 = [gettimeofday];
 
-    $ref->{debug}->debug (2, "executing ($sql)");
+    $ref->{debug}->debug (2, "executing ($sql)") if $ref->{debug};
     $ref->{dbh}->prepare($sql)->execute 
 	or confess "ERROR: $DBI::errstr for query $sql";
     my $t1 = [gettimeofday];
@@ -469,9 +471,42 @@ from	(
 			task_id desc
 	)
 where	ROWNUM = 1";
+	} elsif ($construct eq "smtop-task") {
+	    my $extras = shift;
+	    my $orderby = shift;
+	    $ret = "select 	lpad(' ',3*(l-1)) || task.taskname || '.' || actionname an, 
+	action.task_id, 
+	task.mapper || action.actionmapper mapper,
+	status,
+	actionstatus,
+	action_id,
+	decode (actionstatus, 'running', to_char((SYSDATE - action.inserted_dt) * (86400)),
+				  	 (nvl(action.updated_dt,SYSDATE) - action.inserted_dt) * (86400)) secs,
+	action.callbacks,
+        to_char (action.inserted_dt,'HH24:MI:SS') insd,
+        to_char (action.updated_dt,'HH24:MI:SS') ud,
+        actionpid
+from 	action,
+	task,
+	( 
+		select 	task_id, 
+			level l
+		from 	task  
+		start with 
+			task_id = 	(
+						select 	max(task_id)
+						from	task
+						$extras
+					)
+		connect by prior 
+			task_id = parent_task_id 
+	) iv
+where 	action.task_id = iv.task_id
+and	task.task_id = action.task_id
+order by 
+        $orderby
+";
 	}
-
-
 
     } elsif ($ref->{dbtype} eq "Pg") {
 	if ($construct eq "sysdate") {
@@ -512,6 +547,30 @@ where	ROWNUM = 1";
 	    $task_id = shift;
 	    $tag = shift;
 	    $ref->task_hierarchical_query($task_id, "select * from child_tasks, task_context where child_tasks.task_id = task_context.task_id and tag = '$tag' order by child_tasks.task_id desc limit 1");
+	} elsif ($construct eq "smtop-task") {
+	    my $extras = shift;
+	    my $orderby = shift;
+	    my $task_id = shift;
+	    
+	    $ret = $ref->task_hierarchical_query($task_id, "select 	task.taskname || '.' || actionname an, 
+	action.task_id, 
+	task.mapper || action.actionmapper mapper,
+	status,
+	actionstatus,
+	action_id,
+	coalesce(action.updated_at - now()) secs,
+	action.callbacks,
+        action.created_at AS insd,
+        action.updated_at AS ud,
+        actionpid
+from 	action,
+	task,
+        child_tasks
+where 	action.task_id = child_tasks.task_id
+and	task.task_id = action.task_id
+order by 
+        $orderby
+");
 	}
     } else {
 	confess "Huh!? ... shouldn't be here : " . $ref->{dbtype};

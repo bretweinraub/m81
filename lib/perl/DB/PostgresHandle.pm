@@ -629,3 +629,132 @@ SQL Server "Length" doesn't conform to the standard used by Oracle or Mysql.  Th
 	}
     };
 }
+
+################################################################################
+
+sub now {
+   
+=pod
+
+=head3 $PostgresHandle->now ()
+
+
+return now
+
+=cut
+
+    my $this = shift;
+
+    Confess "DB::PostgresHandle->now requires named arguments, or maybe a non-static method is being called in a static context " if scalar @_ && scalar @_ % 2 != 0;
+    my %args = @_;
+
+
+
+    do {
+
+	my %results = %{$this->getData(sql => "select now() as NOW")};
+	return $results{now}[0];
+    };
+}
+
+################################################################################
+
+sub fetchPrimaryKeyName {
+   
+=pod
+
+=head3 $PostgresHandle->fetchPrimaryKeyName (name => "any string"*, required => "any string")
+
+ - name ("any string")		 : table name to derive
+ - required ("any string")		 : require a result ... throw an error if the primary key can't be derived
+
+attempts to derive the primary key of this table based on DB metadata
+
+=cut
+
+    my $this = shift;
+
+    Confess "DB::PostgresHandle->fetchPrimaryKeyName requires named arguments, or maybe a non-static method is being called in a static context " if scalar @_ && scalar @_ % 2 != 0;
+    my %args = @_;
+    my $name = $args{name};
+    Confess "argument 'name' is required for DB::PostgresHandle->fetchPrimaryKeyName()" unless exists $args{name};
+    my $required = $args{required};
+
+
+
+    do {
+	my %results = %{$this->getData (sql => "
+SELECT 
+  n.nspname AS namespace, 
+  p1.relname AS table, 
+  a1.attname AS column 
+FROM 
+  pg_constraint c, 
+  pg_namespace n, 
+  pg_class p1, 
+  pg_attribute a1 
+WHERE 
+  c.contype = 'p' 
+AND
+  c.connamespace = n.oid 
+AND
+  c.conrelid = a1.attrelid 
+and
+  c.conrelid = p1.oid
+AND
+  a1.attnum = ANY (c.conkey) 
+and 
+  p1.relname = '" . $name . "'
+")};
+
+	Confess "multiple column primary keys not supported" . Dumper(%results)
+	    if $results{rows} > 1;
+
+	Confess "no primary key derived"
+	    if $required and $results{rows} < 1;
+
+	$this->debugPrint(1, "primary key derived as " .  $results{COLUMN_NAME}[0]);
+
+	$results{COLUMN_NAME}[0];
+    };
+}
+
+sub tableExists {
+   
+=pod
+
+=head3 $PostgresHandle->tableExists (name => "any string"*)
+
+ - name ("any string")		 : name to query for
+
+returns true if a table exists in this handle
+
+=cut
+
+    my $this = shift;
+
+    Confess "DB::PostgresHandle->tableExists requires named arguments, or maybe a non-static method is being called in a static context " if scalar @_ && scalar @_ % 2 != 0;
+    my %args = @_;
+    my $name = $args{name};
+    Confess "argument 'name' is required for DB::PostgresHandle->tableExists()" unless exists $args{name};
+
+
+
+    do {
+	my $dbh = $this->getDbh();
+
+	Confess "invalid character $1 in table name $name"
+	    if $name =~ /(-|\/)/;
+
+	$this->debugPrint (0, "the next statement may throw an error (which is to be expected)");
+	my $stmt;
+	eval {
+	    my %results = %{$this->getData (sql => "select * from $name where 1 = 0")};
+	};
+	if ($@) {
+	    return undef;
+	} else {
+	    return 1;
+	}
+    };
+}

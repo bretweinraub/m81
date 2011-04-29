@@ -674,6 +674,21 @@ sub stringToDate {
     };
 }
 
+################################################################################
+
+sub now {
+   <:= $po->contract('now' => {description => 'return now',
+				      getopts => [
+						  ]}); :>
+    do {
+	my %results = %{$this->getData(sql => "select to_char(SYSDATE,'YYYY-MM-DD HH24:MI:SS') NOW from dual")};
+	return $results{NOW}[0];
+    };
+}
+
+
+
+
 
 
 ################################################################################

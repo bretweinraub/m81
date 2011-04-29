@@ -2,7 +2,7 @@
 *.out
 *patch???
 *.log
-*/modules/*
+*/modules/*.xml
 aurchestrator.pl.aura-di*
 *medtronic-admin*
 aurchestrator.pl.insight-admin-console*

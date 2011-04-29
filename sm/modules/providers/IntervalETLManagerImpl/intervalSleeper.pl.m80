@@ -31,11 +31,10 @@ StateMachine::SMUtil::createContext (tag => "loopNumber",
 				     value => ++$loopNumber,
 				     dbhandle => $dbhandle);
 
-my %results = %{$dbhandle->getData(sql => "select to_char(SYSDATE,'YYYY-MM-DD HH24:MI:SS') NOW from dual")};
-my $sysdate = $results{NOW}[0];
+my $now = $dbhandle->now();
 
 StateMachine::SMUtil::createContext (tag => "runDate",
 				     task_id => $parent_task_id,
-				     value => "$sysdate",
+				     value => "$now",
 				     dbhandle => $dbhandle);
 cleanup 0; 

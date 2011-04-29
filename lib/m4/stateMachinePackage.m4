@@ -10,6 +10,7 @@ m4_define([newAutomator],[
 append_variable_space([AUTOMATORS],[$1])
 define_variable([$1_TYPE],[AUTOMATOR])
 define_variable([$1_SID],[$2])
+define_variable([$1_DATABASE],[$2])
 define_variable([$1_type],[oracle])   # hard coded to oracle for now TODO: change this for portable automator
 define_variable([$1_HOST],[$3])
 define_variable([$1_PORT],[$4])

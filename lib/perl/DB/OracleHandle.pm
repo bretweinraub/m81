@@ -1465,6 +1465,35 @@ convert a date string into SQL ready date format
     };
 }
 
+################################################################################
+
+sub now {
+   
+=pod
+
+=head3 $OracleHandle->now ()
+
+
+return now
+
+=cut
+
+    my $this = shift;
+
+    Confess "DB::OracleHandle->now requires named arguments, or maybe a non-static method is being called in a static context " if scalar @_ && scalar @_ % 2 != 0;
+    my %args = @_;
+
+
+
+    do {
+	my %results = %{$this->getData(sql => "select to_char(SYSDATE,'YYYY-MM-DD HH24:MI:SS') NOW from dual")};
+	return $results{NOW}[0];
+    };
+}
+
+
+
+
 
 
 ################################################################################

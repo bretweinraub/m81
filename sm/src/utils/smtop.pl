@@ -1,31 +1,33 @@
 #!/usr/bin/perl
 
+use strict;
+
 use File::Basename;
 use lib dirname($0);
 use Data::Dumper;
 use dbutil;
 use Getopt::Long;
 use Term::ANSIColor qw(:constants);
+use ChainDB;
+use Carp;
 
-require "dbConnect.pl";
 require "require.pl";
 
+my $awidth=80; # with of actionname
 
-$awidth=80; # with of actionname
+GetOptions("task:s" => \my $task,
+	   "flip" => \my $flip,
+	   "debug" => \my $debug,
+	   "refresh:i" => \my $refresh,
+	   "perf" => \my $perf,
+	   "width:i" => \my $awidth,
+	   "summary" => \my $summary,
+	   "html" => \my $html,
+#	   "ShowSql" => \my $showSql,
+           'noQueued' => \my $noQueued,
+	   "id:s" => \my $id);
 
-GetOptions("task:s" => \$task,
-	   "flip" => \$flip,
-	   "debug" => \$debug,
-	   "refresh:i" => \$refresh,
-	   "perf" => \$perf,
-	   "width:i" => \$awidth,
-	   "summary" => \$summary,
-	   "html" => \$html,
-#	   "ShowSql" => \$showSql,
-           'noQueued' => \$noQueued,
-	   "id:s" => \$id);
-
-use Carp;
+my $ChainDB = ChainDB::new (verbose => $debug);
 
 unless (defined $refresh){ $refresh = 4; }
 unless ($summary) {
@@ -55,7 +57,7 @@ sub _printNum {
     print _sprintNum(@_);
 }
 
-$orderby = "action_id";
+my $orderby = "action_id";
 if ($perf ) {
     $orderby = "to_number (decode (actionstatus, 'running', to_char((SYSDATE - action.inserted_dt) * (86400)), (nvl(action.updated_dt,SYSDATE) - action.inserted_dt) * (86400))) asc" ;
 } 
@@ -96,6 +98,9 @@ if ($html) {
 EOF
 }
 
+my $extras;
+my $sql;
+
 
 while (1) {
     if ($task) {
@@ -104,43 +109,11 @@ while (1) {
 	$extras = "						where	task_id = $id";
     }
 
-    %ret = ();
+    my %ret = ();
 
     unless ($summary) {
-	$sql = "select 	lpad(' ',3*(l-1)) || task.taskname || '.' || actionname an, 
-	action.task_id, 
-	task.mapper || action.actionmapper mapper,
-	status,
-	actionstatus,
-	action_id,
-	decode (actionstatus, 'running', to_char((SYSDATE - action.inserted_dt) * (86400)),
-				  	 (nvl(action.updated_dt,SYSDATE) - action.inserted_dt) * (86400)) secs,
-	action.callbacks,
-        to_char (action.inserted_dt,'HH24:MI:SS') insd,
-        to_char (action.updated_dt,'HH24:MI:SS') ud,
-        actionpid
-from 	action,
-	task,
-	( 
-		select 	task_id, 
-			level l
-		from 	task  
-		start with 
-			task_id = 	(
-						select 	max(task_id)
-						from	task
-						$extras
-					)
-		connect by prior 
-			task_id = parent_task_id 
-	) iv
-where 	action.task_id = iv.task_id
-and	task.task_id = action.task_id
-order by 
-        $orderby
-";
+	$sql = $ChainDB->db_specific_construct("smtop-task",$extras,$orderby,$id);
     } else {
-        
         my $action_status_list = '';
         if ($noQueued) {
             $action_status_list = "('running', 'waiting')";
@@ -186,14 +159,28 @@ order	by r";
 
 
     print $sql if $debug;
-    dbutil::loadSQL ($dbh, $sql, \%ret, $debug);
+    $ChainDB->loadSQL ($sql, \%ret, $debug);
 
     system("clear") if $refresh;
+
+    my $i;
+    my $mapper;
+    my $parent_task_id;
+    my $status;
+    my $actionpid;
+    my $actionname;
+    my $action_id;
+    my $ud;
+    my $secs;
+    my $insd;
+    my $taskname;
+    my $indent;
 
     for ($i = 0 ; $i < $ret{rows} ; $i ++ ) {
 	map {eval sprintf ("\$" . lc($_) . " = \"\"") if ref ($ret{$_}) =~ /ARRAY/;} (keys (%ret));
 	map {eval sprintf ("\$" . lc($_) . " = \"" . $ret{$_}[$i] . "\"") if ref ($ret{$_}) =~ /ARRAY/;} (keys (%ret));
 
+	my $actionstatus;
 	unless ($summary) {
 	    colorize($actionstatus, "taskname", _sprint ($ret{AN}[$i], $awidth));
 
@@ -207,7 +194,7 @@ order	by r";
 	    colorize($status, "status", _sprint($status,10));
 
 	    colorize ($actionstatus, "actionstatus", _sprint ($actionstatus, 10));
-
+	    
 #	    print RESET;
 	    _printNum ($action_id,6);
 	    _printNum ($secs,4);

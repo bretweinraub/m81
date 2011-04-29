@@ -57,3 +57,90 @@ sub DBIPrecisionToGenericPrecision {
 	}
     };
 }
+
+################################################################################
+
+sub now {
+   <:= $po->contract('now' => {description => 'return now',
+				      getopts => [
+						  ]}); :>
+    do {
+
+	my %results = %{$this->getData(sql => "select now() as NOW")};
+	return $results{now}[0];
+    };
+}
+
+################################################################################
+
+sub fetchPrimaryKeyName {
+   <:= $po->contract('fetchPrimaryKeyName' => {description => 'attempts to derive the primary key of this table based on DB metadata',
+					       getopts => [
+							   {name => "name",
+							    description => "table name to derive",
+							    required =>  1,},
+							   {name => 'required' ,
+							    description => 'require a result ... throw an error if the primary key can\'t be derived',},
+							   ]}); :>
+    do {
+	my %results = %{$this->getData (sql => "
+SELECT 
+  n.nspname AS namespace, 
+  p1.relname AS table, 
+  a1.attname AS column 
+FROM 
+  pg_constraint c, 
+  pg_namespace n, 
+  pg_class p1, 
+  pg_attribute a1 
+WHERE 
+  c.contype = 'p' 
+AND
+  c.connamespace = n.oid 
+AND
+  c.conrelid = a1.attrelid 
+and
+  c.conrelid = p1.oid
+AND
+  a1.attnum = ANY (c.conkey) 
+and 
+  p1.relname = '" . $name . "'
+")};
+
+	Confess "multiple column primary keys not supported" . Dumper(%results)
+	    if $results{rows} > 1;
+
+	Confess "no primary key derived"
+	    if $required and $results{rows} < 1;
+
+	$this->debugPrint(1, "primary key derived as " .  $results{COLUMN_NAME}[0]);
+
+	$results{COLUMN_NAME}[0];
+    };
+}
+
+sub tableExists {
+   <:= $po->contract('tableExists' => {description => 'returns true if a table exists in this handle',
+				      getopts => [
+						  {name => 'name' ,
+						   required => 't',
+						   description => 'name to query for',},
+						   ]}); :>
+    do {
+	my $dbh = $this->getDbh();
+
+	Confess "invalid character $1 in table name $name"
+	    if $name =~ /(-|\/)/;
+
+	$this->debugPrint (0, "the next statement may throw an error (which is to be expected)");
+	my $stmt;
+	eval {
+	    my %results = %{$this->getData (sql => "select * from $name where 1 = 0")};
+	};
+	if ($@) {
+	    return undef;
+	} else {
+	    return 1;
+	}
+    };
+}

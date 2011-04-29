@@ -17,7 +17,7 @@ my $ps = Helpers::PerlScript->new( name => 'shell2context.pl' ,
                                    );
 print $ps->dump(); print $ps->pod();
 :>
-    my $dbhandle = DB::DBHandleFactory::newDBHandle();
+    my $dbhandle = DB::DBHandleFactory::newDBHandle(namespace => "CONTROLLER");
  
 while (<>) {
   SWITCH: {

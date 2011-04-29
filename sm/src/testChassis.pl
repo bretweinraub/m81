@@ -51,11 +51,13 @@ sub debug {
 
 sub startSlave {
     system("make");
-    $id = `m80 --execute ./automator.pl -config $testXMLFile -logDir . -debug 1 -sleep 0 -print` ;
+    $id = `m80 --execute ./aurchestrator.pl -config $testXMLFile -logDir . -debug 1 -sleep 0 -print` ;
     chomp($id);
 
     $pidfile = $id . ".pid";
     $id .= ".running";
+
+    debug("pidfile is $pidfile");
 
     system ("rm -f $id");
     $pid = fork();
@@ -69,7 +71,7 @@ sub startSlave {
 	$smpid = `cat $pidfile`;
     } else {
 	system ("mkdir logs.$$");
-	exec("m80 --execute " . ($debug ? "perl -d:ptkdb " : "") . "./automator.pl -config $testXMLFile -logDir logs.$$ -debug " . (defined $DebugLevel ? $DebugLevel : 1)  . " -sleep 0");
+	exec("m80 --execute " . ($debug ? "perl -d:ptkdb " : "") . "./aurchestrator.pl -config $testXMLFile -logDir logs.$$ -debug " . (defined $DebugLevel ? $DebugLevel : 1)  . " -sleep 0");
     }
 }
 
@@ -87,9 +89,13 @@ sub bumpSM {
     startSlave;
 }
 
-startSlave();	   
+debug "before start slave";
+startSlave();
+debug "after start slave";
 $testNum = 0;
 $numFails = 0;
+my @all_tests = ();
+
 foreach $test (@tests) {
     $testNum++;
     foreach $command (@{$test->{commands}}) {
@@ -117,7 +123,7 @@ foreach $test (@tests) {
     foreach $expectation (@{$test->{expectations}}) {
 	%results = ();
 	eval {
-	    dbutil::loadSQL	($dbh, "select $expectation->{field} from $expectation->{table} where task_id = " . $tasks{$expectation->{name}}, \%results,1);
+	    dbutil::loadSQL($dbh, "select $expectation->{field} from $expectation->{table} where task_id = " . $tasks{$expectation->{name}}, \%results,1);
 	  };
 	seeya() if $@;
 	$result = $results{uc($expectation->{field})}[0];
@@ -127,14 +133,17 @@ foreach $test (@tests) {
 	    print BOLD, GREEN, "Success", RESET;
 	    print "\n";
 	} else {
+	    $test->{failed} = "true";
 	    print BOLD, RED, "FAILED";
 	    print RESET, "\n";
 	    $thisFail=1;
 	}
     }
     $numFails += $thisFail;
+    push(@all_tests,$test);
 }
 print "Tests (success/total) = (" . ($testNum - $numFails) . "/$testNum)\n";
+
 seeya() unless $debug;
 
 
