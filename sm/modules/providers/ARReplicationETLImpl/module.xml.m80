@@ -28,9 +28,13 @@ $module{load} = {a => [{n => load,
 			t => __SUCCESS__}]};
 
 
-# $module{postprocess} = {a => [{n => postprocess,
-# 			       c => 'doCrawl.sh',
-# 			       t => __SUCCESS__}]};
+$module{postprocess} = {a => [{n => postprocess,
+			       c => 'exit 0',
+			       t => __SUCCESS__}]};
+
+$module{crawl} = {a => [{n => crawl,
+			       c => 'exit 0',
+			       t => __SUCCESS__}]};
 
 :>
 

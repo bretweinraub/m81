@@ -17,6 +17,7 @@ emacs_trace do
   eval %{
     class SourceTable < Source
       set_table_name :#{etl_helper.sourceRD.tableName}
+      set_primary_key :#{etl_helper.sourceRD.naturalKey}
     end
 
     class TargetTable < Target
@@ -24,18 +25,31 @@ emacs_trace do
     end
   }
 
-  TargetTable.connection.execute("truncate table #{TargetTable.table_name}")
+  begin
+    TargetTable.connection.execute("truncate table #{TargetTable.table_name}")
+  rescue Exception => e
+    eval %{
+      class ::CreateTable < ActiveRecord::Migration
+        def self.up
+          create table #{TargetTable.table_name.to_sym} do |t|
+            t.timestamps
+          end
+        end
+      end
+    }
+  ### TODO Finish above.
+    raise e
+
+  end
 
   msg_exec "Loading remote rows in #{TargetTable.table_name}" do
     SourceTable.all.each do |t|
-      new = etl_helper.rewrite_attributes(row => t)
+      new = etl_helper.rewrite_attributes(:row => t,
+                                          :original_primary_key => etl_helper.sourceRD.naturalKey,
+                                          :record_class => TargetTable)
       TargetTable.create(new)
       print "."
     end
-  end
-
-  ENV.keys.sort.each do |k|
-    puts "#{k}=#{ENV[k]}" if k.match /wp_users_trg/i
   end
 
 

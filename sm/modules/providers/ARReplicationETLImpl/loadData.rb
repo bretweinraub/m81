@@ -26,13 +26,13 @@ emacs_trace do
 
   msg_exec "moving staged rows from #{StageTable.table_name} #{TargetTable.table_name}" do
     StageTable.all.each do |t|
-      pk = t.send(StageTable.primary_key)
+      original_primary_key = etl_helper.original_primary_key 
 
-      new = etl_helper.rewrite_attributes(:row => t,
-                                          :record_class => TargetTable)
+      pk = t.send(original_primary_key)
 
+      new = t.attributes
 
-      if target_row = TargetTable.send("find_by_original_#{StageTable.primary_key}",pk)
+      if target_row = TargetTable.send("find_by_#{original_primary_key}",pk)
         new.keys.each do |k|
           target_row.send("#{k}=",new[k])
         end

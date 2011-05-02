@@ -31,12 +31,12 @@ $module{run} = {a => [{n => run,
 					 t => __SUCCEEDED__,},],},},],};
 
 $module{loopSuccess} = {a => [{n => loopSuccess,
-			       c => 'recordResults.pl -result success',
+			       c => 'recordResults.rb -r success',
 			       t => 'PollingETLLoop_parent',},]};
 
 
 $module{loopFailure} = {a => [{n => loopFailure,
-			       c => 'recordResults.pl -result failue',
+			       c => 'recordResults.rb -r failue',
 			       t => 'PollingETLLoop_parent',},]};
 
 :>
